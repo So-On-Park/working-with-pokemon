@@ -9,7 +9,7 @@ Windows 데스크탑 위에서 함께 지내는 포켓몬 버디 앱입니다.
 
 - 개발 브랜치: [`develop`](https://github.com/So-On-Park/working-with-pokemon/tree/develop)
 - 릴리스: [`Releases`](https://github.com/So-On-Park/working-with-pokemon/releases)
-- 최신 Windows 배포 파일: Releases에서 `PokemonBuddy-v0.1.0-win64.zip` 다운로드
+- 최신 Windows 배포 파일: Releases에서 `PokemonBuddy-v0.1.1-win64.zip` 다운로드
 
 ## 앱 개요
 
@@ -46,7 +46,7 @@ build.bat
 생성물:
 
 - `dist/PokemonBuddy.exe`
-- `PokemonBuddy-v0.1.0-win64.zip`
+- `PokemonBuddy-v0.1.1-win64.zip`
 
 ## 브랜치 정책
 
