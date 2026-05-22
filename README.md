@@ -19,10 +19,10 @@ Pokemon Buddy는 Windows 데스크탑 위에 포켓몬 친구들을 살짝 데�
 
 <table align="center">
   <tr>
-    <td align="center"><img src="assets/0001_showdown.gif" width="56" alt="이상해씨">
-    <td align="center"><img src="assets/0004_showdown.gif" width="56" alt="파이리">
-    <td align="center"><img src="assets/0007_showdown.gif" width="56" alt="꼬부기">
-    <td align="center"><img src="assets/0025_showdown.gif" width="56" alt="피카츄">
+    <td align="center"><img src="assets/0001_showdown.gif" width="56" alt="이상해씨"></td>
+    <td align="center"><img src="assets/0004_showdown.gif" width="56" alt="파이리"></td>
+    <td align="center"><img src="assets/0007_showdown.gif" width="56" alt="꼬부기"></td>
+    <td align="center"><img src="assets/0025_showdown.gif" width="56" alt="피카츄"></td>
   </tr>
 </table>
 
