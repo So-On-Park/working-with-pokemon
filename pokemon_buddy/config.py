@@ -51,7 +51,7 @@ SPRITE_STYLES = [
     ("bw",       "도트 (Gen 5)"),
     ("showdown", "쇼다운 애니메이션"),
 ]
-DEFAULT_SPRITE_STYLE = "bw"
+DEFAULT_SPRITE_STYLE = "showdown"
 
 # Bulk download — Gen 1 only for the encounter pool we already support.
 BULK_DEX_RANGE = (1, 151)

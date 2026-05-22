@@ -21,6 +21,22 @@ def temp_db(tmp_path, monkeypatch):
 
 @pytest.fixture
 def store(temp_db):
+    """Tests run as if the user has already completed onboarding — the
+    fixture flips the `onboarded` meta and re-runs the seed so the bag
+    isn't empty. Tests that need to observe the fresh-install state
+    should use `unonboarded_store` instead."""
+    from pokemon_buddy.state import Store
+    s = Store()
+    s.set_meta("onboarded", "1")
+    s._ensure_active_buddy()
+    return s
+
+
+@pytest.fixture
+def unonboarded_store(temp_db):
+    """A Store as it exists immediately after a brand-new install:
+    no `onboarded` meta, empty bag. BuddyApp's onboarding flow is
+    expected to seed the first buddy."""
     from pokemon_buddy.state import Store
     return Store()
 

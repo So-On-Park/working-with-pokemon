@@ -139,6 +139,16 @@ class BuddyApp:
         self.qt_app = qt_app
         self.store = Store()
 
+        # First-run onboarding — must complete BEFORE we build any agents,
+        # because _build_agents_from_party() expects at least one bag entry.
+        # Existing users (installs predating onboarding) get grandfathered:
+        # if they already have a bag, we mark them as onboarded silently.
+        if not self.store.get_meta("onboarded"):
+            if self.store.list_bag():
+                self.store.set_meta("onboarded", "1")
+            else:
+                self._run_onboarding()
+
         stored_style = self.store.get_meta("sprite_style", DEFAULT_SPRITE_STYLE)
         self.sprite_style = self._normalize_style(stored_style)
         if stored_style != self.sprite_style:
@@ -338,6 +348,35 @@ class BuddyApp:
             pass
 
     # ---- helpers ----
+    def _run_onboarding(self) -> None:
+        """Show the first-run dialog and seed the user's chosen starter.
+        Idempotent — guarded by the `onboarded` meta. Falls back to safe
+        defaults if the dialog is dismissed without a pick (the dialog
+        itself defaults adventurer_name and chosen_dex_id, so we just
+        commit whatever it returns)."""
+        from .onboarding_dialog import OnboardingDialog, STARTER_CHOICES
+        log.info("first-run onboarding starting")
+        dlg = OnboardingDialog(parent=None)
+        dlg.exec()
+        name = dlg.adventurer_name
+        dex_id = dlg.chosen_dex_id
+        species_name = dlg.chosen_name
+
+        self.store.set_meta("adventurer_name", name)
+
+        # Seed the starter individual + dex entry. add_to_bag already
+        # commits, so the next read sees the buddy as the active one.
+        buddy = self.store.add_to_bag(dex_id, is_rare=False)
+        self.store.set_meta("active_bag_id", str(buddy.bag_id))
+        self.store.save_active_party([buddy.bag_id])
+        self.store.record_catch(dex_id, species_name, is_rare=False)
+        # Populate the proper Korean name so the buddy doesn't show as
+        # "#0001" until PokeAPI is reached.
+        self.store.set_species_name(dex_id, species_name)
+
+        self.store.set_meta("onboarded", "1")
+        log.info("onboarded: name=%r starter=%d (%s)", name, dex_id, species_name)
+
     @staticmethod
     def _normalize_style(stored: Optional[str]) -> str:
         """Old DBs may have 'bw_shiny' / 'showdown_shiny' stored — collapse
@@ -416,6 +455,12 @@ class BuddyApp:
         custom_act = QAction("커스텀 포켓몬 추가…", menu)
         custom_act.triggered.connect(self.on_add_custom_pokemon)
         menu.addAction(custom_act)
+
+        menu.addSeparator()
+
+        help_act = QAction("기능 설명…", menu)
+        help_act.triggered.connect(self.on_show_help)
+        menu.addAction(help_act)
 
         drop_act = QAction("아이템 떨어뜨리기 (테스트)", menu)
         drop_act.triggered.connect(self.on_force_item_drop)
@@ -844,6 +889,13 @@ class BuddyApp:
     # ---- wild encounters ----
     def on_force_encounter(self) -> None:
         self.encounters.force_spawn()
+
+    def on_show_help(self) -> None:
+        """Open the feature reference dialog."""
+        from .help_dialog import HelpDialog
+        log.info("on_show_help")
+        dlg = HelpDialog(parent=None)
+        dlg.exec()
 
     def on_add_custom_pokemon(self) -> None:
         """Open the custom-pokemon registration dialog. On accept, copies

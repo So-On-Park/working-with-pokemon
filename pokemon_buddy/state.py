@@ -587,6 +587,13 @@ class Store:
             self.set_meta("active_bag_id", str(first["id"]))
             return
 
+        # Bag is empty. Defer seeding to BuddyApp's onboarding flow — the
+        # user picks their starter from a pokéball selection. We only fall
+        # back to the hard-coded STARTER_DEX_ID if onboarding already ran
+        # but somehow nothing got persisted (corruption, manual deletion).
+        if not self.get_meta("onboarded"):
+            return
+
         now = time.time()
         self.conn.execute(
             "INSERT OR IGNORE INTO dex(dex_id, is_rare, name, first_caught_at, "
