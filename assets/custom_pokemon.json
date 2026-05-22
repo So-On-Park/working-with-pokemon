@@ -1,0 +1,23 @@
+{
+  "next_id": 9004,
+  "entries": {
+    "9001": {
+      "name_ko": "센몬",
+      "name_eng": "senmon",
+      "extra_motion": "9001_extra.gif",
+      "display_scale": 1.5
+    },
+    "9002": {
+      "name_ko": "쏘니",
+      "name_eng": "ssony",
+      "extra_motion": "9002_extra.gif",
+      "display_scale": 1.0
+    },
+    "9003": {
+      "name_ko": "후니",
+      "name_eng": "huni",
+      "extra_motion": "9003_extra.gif",
+      "display_scale": 1.0
+    }
+  }
+}

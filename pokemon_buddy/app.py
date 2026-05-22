@@ -52,7 +52,6 @@ from .buddy_popup import (
 from .chatter import ChatterEngine
 from . import custom_pokemon
 from .custom_pokemon_dialog import CustomPokemonDialog
-from .daily_schedule import DailyScheduleEngine
 from .encounter import EncounterManager
 from .evolution import can_evolve, get_stone_evolution_target
 from .evolution_dialog import EvolutionDialog
@@ -213,12 +212,8 @@ class BuddyApp:
         self.item_drops.collected.connect(self.on_item_collected)
         self.item_drops.start()
 
-        # Wall-clock scheduled greetings — 출근 / 점심 / 퇴근.
-        self.schedule = DailyScheduleEngine(
-            self.store, lambda: self.primary.buddy, parent=qt_app,
-        )
-        self.schedule.fired.connect(self._on_scheduled_event)
-        self.schedule.start()
+        # Wall-clock greetings (출근/점심/퇴근) removed — only user-set
+        # reminders fire now. ReminderScheduler above is enough.
 
         primary.window.say("안녕! 같이 일하자 ✨", 3000)
         self._update_tray_status()
@@ -390,8 +385,12 @@ class BuddyApp:
         return DEFAULT_SPRITE_STYLE
 
     # ---- tray ----
+    def _is_developer_mode(self) -> bool:
+        return self.store.get_meta("developer_mode") == "1"
+
     def _build_tray_menu(self) -> None:
         menu = QMenu()
+        dev = self._is_developer_mode()
 
         feed = QAction("밥 주기", menu)
         feed.triggered.connect(self.on_feed)
@@ -438,9 +437,11 @@ class BuddyApp:
             self._style_group.addAction(act)
             style_menu.addAction(act)
 
-        bulk_act = QAction("에셋 일괄 다운로드 (Gen 1)", menu)
-        bulk_act.triggered.connect(self.on_start_bulk)
-        menu.addAction(bulk_act)
+        # Bulk download is a developer-mode-only convenience.
+        if dev:
+            bulk_act = QAction("에셋 일괄 다운로드 (Gen 1)", menu)
+            bulk_act.triggered.connect(self.on_start_bulk)
+            menu.addAction(bulk_act)
 
         menu.addSeparator()
 
@@ -448,23 +449,30 @@ class BuddyApp:
         reminders_act.triggered.connect(self.on_open_reminder_dialog)
         menu.addAction(reminders_act)
 
-        spawn_act = QAction("야생 포켓몬 소환 (테스트)", menu)
-        spawn_act.triggered.connect(self.on_force_encounter)
-        menu.addAction(spawn_act)
+        rename_adv_act = QAction("모험자 이름 변경…", menu)
+        rename_adv_act.triggered.connect(self.on_rename_adventurer)
+        menu.addAction(rename_adv_act)
 
         custom_act = QAction("커스텀 포켓몬 추가…", menu)
         custom_act.triggered.connect(self.on_add_custom_pokemon)
         menu.addAction(custom_act)
+
+        # Test actions — hidden until the user toggles developer mode via
+        # the secret pokéball tap inside HelpDialog.
+        if dev:
+            spawn_act = QAction("야생 포켓몬 소환 (테스트)", menu)
+            spawn_act.triggered.connect(self.on_force_encounter)
+            menu.addAction(spawn_act)
+
+            drop_act = QAction("아이템 떨어뜨리기 (테스트)", menu)
+            drop_act.triggered.connect(self.on_force_item_drop)
+            menu.addAction(drop_act)
 
         menu.addSeparator()
 
         help_act = QAction("기능 설명…", menu)
         help_act.triggered.connect(self.on_show_help)
         menu.addAction(help_act)
-
-        drop_act = QAction("아이템 떨어뜨리기 (테스트)", menu)
-        drop_act.triggered.connect(self.on_force_item_drop)
-        menu.addAction(drop_act)
 
         menu.addSeparator()
 
@@ -558,7 +566,6 @@ class BuddyApp:
                         parent=None)
         dlg.set_as_buddy.connect(self.on_swap_buddy)
         dlg.reminders_saved.connect(self.reminder_scheduler.check_now)
-        dlg.schedule_saved.connect(self.schedule.check_now)
         dlg.use_item_requested.connect(self.on_use_item)
         dlg.show_detail.connect(self.on_show_pokemon_detail)
         dlg.bag_changed.connect(self._on_bag_changed)
@@ -894,8 +901,29 @@ class BuddyApp:
         """Open the feature reference dialog."""
         from .help_dialog import HelpDialog
         log.info("on_show_help")
-        dlg = HelpDialog(parent=None)
+        dlg = HelpDialog(self.store, parent=None)
+        dlg.developer_mode_toggled.connect(self._on_developer_mode_toggled)
         dlg.exec()
+
+    def _on_developer_mode_toggled(self, enabled: bool) -> None:
+        """HelpDialog's secret pokéball tap fired. Rebuild the tray menu
+        so the dev-only actions appear or disappear."""
+        log.info("developer mode %s — rebuilding tray menu", enabled)
+        self._build_tray_menu()
+
+    def on_rename_adventurer(self) -> None:
+        current = self.store.get_meta("adventurer_name") or ""
+        new_name, ok = QInputDialog.getText(
+            None, "모험자 이름 변경",
+            "새 이름을 입력해줘 (비우면 기본값 '모험가'):",
+            text=current,
+        )
+        if not ok:
+            return
+        name = new_name.strip() or "모험가"
+        self.store.set_meta("adventurer_name", name)
+        log.info("adventurer renamed: %s -> %s", current, name)
+        self.primary.window.say(f"이제부터 {name}이라고 부를게! ✨", 2800)
 
     def on_add_custom_pokemon(self) -> None:
         """Open the custom-pokemon registration dialog. On accept, copies

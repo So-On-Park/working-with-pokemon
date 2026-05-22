@@ -52,6 +52,24 @@ class ChatterEngine(QObject):
             return 5 * 60
         return messages.next_chatter_interval(b.friendship)
 
+    def _maybe_vocative(self) -> str:
+        """A short prefix like '지수야, ' that pet uses to call the user
+        by name. Fires ~30% of the time, only when the user has set a real
+        name (not the default '모험가'). Returns '' otherwise."""
+        name = (self.store.get_meta("adventurer_name") or "").strip()
+        if not name or name == "모험가":
+            return ""
+        if random.random() > 0.30:
+            return ""
+        # Korean vocative ending — `아` after a consonant ending,
+        # `야` after a vowel ending. Non-Korean names get a comma fallback.
+        last = name[-1]
+        if "가" <= last <= "힣":
+            has_jongseong = (ord(last) - ord("가")) % 28 != 0
+            suffix = "아" if has_jongseong else "야"
+            return f"{name}{suffix}, "
+        return f"{name}, "
+
     def start(self) -> None:
         # Daily greeting fires shortly after startup if it's a new local day.
         QTimer.singleShot(2500, self._maybe_daily_greeting)
@@ -84,10 +102,10 @@ class ChatterEngine(QObject):
         )
         welcome = messages.pick_welcome_back(personality, absence_hours)
         if welcome is not None:
-            line = f"{welcome}  (+{DAILY_GREETING_EXP_BONUS} EXP)"
+            line = f"{self._maybe_vocative()}{welcome}  (+{DAILY_GREETING_EXP_BONUS} EXP)"
         else:
             base = messages.pick(messages.GREETING, buddy.friendship)
-            line = f"{base}  (+{DAILY_GREETING_EXP_BONUS} EXP)"
+            line = f"{self._maybe_vocative()}{base}  (+{DAILY_GREETING_EXP_BONUS} EXP)"
         self.chatter.emit(line)
         self.daily_greeting.emit(DAILY_GREETING_EXP_BONUS)
 
@@ -101,6 +119,6 @@ class ChatterEngine(QObject):
             personality = messages.personality_for(buddy.personality)
             line = messages.pick_chatter(personality, buddy.friendship)
             if line:
-                self.chatter.emit(line)
+                self.chatter.emit(f"{self._maybe_vocative()}{line}")
         self._last_chat_at = now
         self._next_delay = self._compute_next_delay()

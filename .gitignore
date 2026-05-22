@@ -55,7 +55,13 @@ debug.log
 data/*
 !data/.gitkeep
 
-# Sprite cache (downloaded from PokeAPI on demand) + user-registered
-# custom pokemon + per-user display scale + name caches.
+# Sprite cache (downloaded from PokeAPI on demand) + per-user display
+# scale + name caches.
 assets/*
 !assets/.gitkeep
+
+# User-registered custom pokemon ARE tracked — they're authored content
+# that should ship with the repo. PokeAPI downloads (4-digit dex_ids
+# 0001-1999) stay ignored above by the broad `assets/*` rule.
+!assets/custom_pokemon.json
+!assets/9[0-9][0-9][0-9]_*.gif
