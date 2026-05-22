@@ -38,7 +38,12 @@
       "name_ko": "쪠리",
       "name_eng": "zzery",
       "extra_motion": null,
-      "display_scale": 1.0
+      "display_scale": 1.0,
+      "species_info": {
+        "weight_kg": 39.6,
+        "height_m": 0.9,
+        "gender_rate": 7
+      }
     }
   }
 }
