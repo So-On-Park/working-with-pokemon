@@ -25,9 +25,11 @@ SPEECH_BUBBLE_PX = 26
 TARGET_DISPLAY_PX = 64
 
 APP_NAME = "Pokemon Buddy"
-# Windows AppUserModelID — groups our windows / notifications under one
-# taskbar entry. Format: <owner>.<app>, no spaces.
-APP_ID = "SoOnPark.PokemonBuddy"
+# Windows AppUserModelID — also serves as the display name on toast
+# notifications when no shortcut DisplayName is registered. Kept short
+# and friendly so alarms read as "포켓버디" instead of a developer-y
+# "SoOnPark.PokemonBuddy" string.
+APP_ID = "포켓버디"
 
 # Shared dialog width — one MainPanel window hosts all four tabs
 # (bag / inventory / dex / reminders) via a QStackedWidget. This is the
