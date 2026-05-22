@@ -1010,13 +1010,23 @@ class BuddyApp:
         was_visible = [(a, a.window.isVisible()) for a in self.agents]
         for agent in self.agents:
             agent.window.hide()
+        # Initialize OUTSIDE the try so a hiccup in the int()/enum compare
+        # below can't leave `accepted` undefined and crash the finally-then-
+        # `if not accepted` path with NameError. We had a silent crash here
+        # before — the int conversion or enum compare was raising and the
+        # function would just stop without registering the new pokemon.
+        accepted = False
         try:
             dlg = CustomPokemonDialog(parent=None)
             log.debug("about to call dlg.exec()")
             result = dlg.exec()
-            log.debug("dlg.exec() returned %r (Accepted=%r)",
-                     int(result), int(dlg.Accepted))
-            accepted = result == dlg.Accepted
+            log.debug("dlg.exec() returned: %s", result)
+            # Use the class attribute (1) so we don't depend on QDialog
+            # enum quirks across PySide6 versions.
+            accepted = (result == 1)
+            log.debug("accepted=%s", accepted)
+        except Exception:  # noqa: BLE001
+            log.exception("dlg.exec() flow raised")
         finally:
             log.debug("entering finally — restoring buddies")
             for agent, was_vis in was_visible:

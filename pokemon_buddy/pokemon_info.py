@@ -59,7 +59,13 @@ def get_species_info(dex_id: int) -> Optional[dict]:
     """Returns {weight_kg, height_m, gender_rate} or None.
 
     `gender_rate` is the PokeAPI convention: -1 for genderless, otherwise
-    the chance of being female out of 8 (so 4 = 50/50)."""
+    the chance of being female out of 8 (so 4 = 50/50). Custom (user-
+    registered) pokemon get synthesised values from the custom registry —
+    PokeAPI obviously doesn't know about them."""
+    from . import custom_pokemon
+    if custom_pokemon.is_custom(dex_id):
+        return custom_pokemon.get_species_info(dex_id)
+
     cache = _load_cache()
     key = str(dex_id)
     if key in cache:
