@@ -420,10 +420,6 @@ class BuddyApp:
         dex.triggered.connect(self.on_open_dex)
         menu.addAction(dex)
 
-        status = QAction("스탯 보기", menu)
-        status.triggered.connect(self.on_show_status)
-        menu.addAction(status)
-
         menu.addSeparator()
 
         style_menu = menu.addMenu("스프라이트 스타일")
@@ -520,18 +516,6 @@ class BuddyApp:
         """Left-click on a buddy. Routed via agent's `pet_requested` so the
         right buddy gets the friendship bump."""
         agent.on_pet()
-
-    def on_show_status(self) -> None:
-        b = self.primary.buddy
-        text = (
-            f"{b.display_name}  ·  Lv.{b.level}\n"
-            f"종족 : {b.species_label}\n"
-            f"EXP : {b.exp} / {b.exp_to_next}\n"
-            f"친밀도 : {b.friendship} / 100\n"
-            f"기분 : {b.mood}"
-        )
-        QMessageBox.information(self.primary.window, "Pokemon Buddy", text)
-        self._update_tray_status()
 
     def on_quit(self) -> None:
         self._save_positions()
@@ -866,7 +850,7 @@ class BuddyApp:
             mp.refresh_bag()
         new_primary = self.primary
         new_primary.window.say(
-            f"이제부터 {new_primary.buddy.display_name}랑 함께! "
+            f"이제부터 {new_primary.buddy.display_name}(이)랑 함께! "
             f"Lv.{new_primary.buddy.level} 🎉",
             2800,
         )
@@ -923,9 +907,10 @@ class BuddyApp:
 
     def on_rename_adventurer(self) -> None:
         current = self.store.get_meta("adventurer_name") or ""
+        display = current if current else "(없음)"
         new_name, ok = QInputDialog.getText(
             None, "모험자 이름 변경",
-            "새 이름을 입력해줘 (비우면 기본값 '모험가'):",
+            f"현재 이름: {display}\n\n새 이름을 입력해줘 (비우면 기본값 '모험가'):",
             text=current,
         )
         if not ok:
@@ -933,7 +918,7 @@ class BuddyApp:
         name = new_name.strip() or "모험가"
         self.store.set_meta("adventurer_name", name)
         log.info("adventurer renamed: %s -> %s", current, name)
-        self.primary.window.say(f"이제부터 {name}이라고 부를게! ✨", 2800)
+        self.primary.window.say(f"이제부터 {name}()이)라고 부를게! ✨", 2800)
 
     # ---- backup / restore ----
     def on_create_backup(self) -> None:
