@@ -1268,11 +1268,15 @@ class Store:
             DELETE FROM inventory;
             DELETE FROM buddy;
         """)
-        # Drop runtime pointers + starter-item gate so the user gets the
-        # starter pack again on a fresh slate.
+        # Drop runtime pointers + starter-item gate + onboarding markers
+        # so the next launch walks the user through the pokéball pick
+        # again. `active_party` is mandatory — otherwise stale bag_ids
+        # point the new BuddyAgent build at non-existent rows and crash
+        # with an IndexError on `self.primary`.
         self.conn.execute(
             "DELETE FROM meta WHERE key IN "
-            "('active_bag_id', 'active_dex_id', "
+            "('active_bag_id', 'active_dex_id', 'active_party', "
+            " 'onboarded', 'adventurer_name', "
             " 'last_greeting_date', 'last_encounter_at', "
             " 'last_item_drop_at', 'starter_items_seeded', "
             " 'master_ball_pending', "

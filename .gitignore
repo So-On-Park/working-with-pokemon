@@ -22,6 +22,13 @@ dist/
 # Distribution archives — they get rebuilt from sources, no need to track
 PokemonBuddy-*.zip
 
+# User-created backup zips (trayed "백업하기…" output) — personal data
+pokemon-buddy-backup-*.zip
+pokemon-buddy-backup-*
+
+# Claude Code tool settings — personal, machine-specific
+.claude/
+
 # --- Test artifacts ---
 .pytest_cache/
 .coverage

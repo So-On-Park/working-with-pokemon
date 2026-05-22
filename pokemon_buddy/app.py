@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import sys
 import logging
+from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtGui import QAction, QActionGroup, QIcon, QImageReader, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
+    QFileDialog,
     QInputDialog,
     QMenu,
     QMessageBox,
@@ -476,6 +478,14 @@ class BuddyApp:
 
         menu.addSeparator()
 
+        backup_act = QAction("백업하기…", menu)
+        backup_act.triggered.connect(self.on_create_backup)
+        menu.addAction(backup_act)
+
+        restore_act = QAction("백업 불러오기…", menu)
+        restore_act.triggered.connect(self.on_restore_backup)
+        menu.addAction(restore_act)
+
         reset_act = QAction("초기화…", menu)
         reset_act.triggered.connect(self.on_reset_data)
         menu.addAction(reset_act)
@@ -925,6 +935,87 @@ class BuddyApp:
         log.info("adventurer renamed: %s -> %s", current, name)
         self.primary.window.say(f"이제부터 {name}이라고 부를게! ✨", 2800)
 
+    # ---- backup / restore ----
+    def on_create_backup(self) -> None:
+        """Ask for a destination path, dump the user's state into a zip."""
+        from .backup import create_backup
+        import time as _t
+        default_name = f"pokemon-buddy-backup-{_t.strftime('%Y%m%d-%H%M%S')}.zip"
+        path, _ = QFileDialog.getSaveFileName(
+            None, "백업 저장 위치", default_name,
+            "All Files (*)",
+        )
+        if not path:
+            return
+        try:
+            info = create_backup(Path(path))
+        except Exception as exc:  # noqa: BLE001
+            log.exception("backup failed")
+            QMessageBox.critical(None, "백업 실패", f"백업 중 오류:\n{exc}")
+            return
+        size_kb = info["byte_size"] // 1024
+        log.info("backup created at %s (%d KB)", path, size_kb)
+        QMessageBox.information(
+            None, "백업 완료",
+            f"백업 파일이 저장됐어요.\n\n"
+            f"파일: {Path(path).name}\n"
+            f"크기: {size_kb} KB\n"
+            f"항목: {info['file_count']}개",
+        )
+
+    def on_restore_backup(self) -> None:
+        """Pick a backup file, confirm, restore in place, then quit so the
+        next launch reads the fresh DB."""
+        from .backup import inspect_backup, restore_backup
+        path, _ = QFileDialog.getOpenFileName(
+            None, "백업 파일 선택", "",
+            "All Files (*)",
+        )
+        if not path:
+            return
+        src = Path(path)
+        manifest = inspect_backup(src)
+        if manifest is None:
+            QMessageBox.warning(
+                None, "백업 파일 아님",
+                "선택한 파일이 Pokemon Buddy 백업이 아니에요.",
+            )
+            return
+        import datetime as _dt
+        created = _dt.datetime.fromtimestamp(
+            manifest.get("created_at", 0)
+        ).strftime("%Y-%m-%d %H:%M")
+        confirm = QMessageBox.question(
+            None, "백업 불러오기",
+            f"백업을 불러오면 현재 모든 진행도가 덮어써집니다.\n\n"
+            f"백업 시각: {created}\n"
+            f"항목 수: {manifest.get('file_count', '?')}개\n\n"
+            f"계속할까요? (앱이 자동으로 종료되며, 다시 실행하면 복원된 상태로 시작됩니다)"
+        )
+        if confirm != QMessageBox.Yes:
+            return
+        # Close store so SQLite handle is released before we overwrite the DB.
+        try:
+            self.store.close()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            restore_backup(src)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("restore failed")
+            QMessageBox.critical(
+                None, "복원 실패",
+                f"백업 복원 중 오류:\n{exc}\n\n"
+                f"DB가 손상됐을 수 있습니다. 앱을 다시 실행해보세요.",
+            )
+            return
+        log.info("backup restored from %s — quitting for clean reboot", path)
+        QMessageBox.information(
+            None, "복원 완료",
+            "백업을 불러왔어요. 앱을 종료할게요 — 다시 실행해주세요.",
+        )
+        self.qt_app.quit()
+
     def on_add_custom_pokemon(self) -> None:
         """Open the custom-pokemon registration dialog. On accept, copies
         the chosen GIF(s) into the assets dir under a freshly minted dex_id,
@@ -984,8 +1075,9 @@ class BuddyApp:
     def on_reset_data(self) -> None:
         confirm = QMessageBox.question(
             self.primary.window, "초기화",
-            "모든 포켓몬·도감·가방 데이터를 지우고 새로 시작할까?\n"
-            "(리마인더와 창 위치는 유지)",
+            "모든 포켓몬·도감·가방·모험자 이름까지 지우고 처음부터 다시 시작할까?\n"
+            "(리마인더와 창 위치는 유지)\n\n"
+            "초기화 후엔 앱이 자동으로 종료돼. 다시 실행하면 포켓볼 선택부터 시작!",
         )
         if confirm != QMessageBox.Yes:
             return
@@ -993,11 +1085,19 @@ class BuddyApp:
         if mp is not None:
             mp.close()
         self.store.reset_all_data()
-        # Tear down all party windows and rebuild from the freshly-seeded
-        # starter party.
-        self._rebuild_agents()
-        self.primary.window.say("처음부터 다시 시작! ✨", 3000)
-        self.primary.anim.play("surprised")
+        # Release the SQLite handle so the next launch (which re-runs
+        # onboarding) opens a clean connection.
+        try:
+            self.store.close()
+        except Exception:  # noqa: BLE001
+            pass
+        log.info("reset complete — quitting for clean onboarding next launch")
+        QMessageBox.information(
+            None, "초기화 완료",
+            "초기화가 끝났어. 앱을 종료할게 — 다시 실행하면\n"
+            "모험자 이름 입력부터 다시 시작할 수 있어 ✨",
+        )
+        self.qt_app.quit()
 
     # ---- wild caught (rewards go to primary buddy) ----
     def on_wild_caught(self, dex_id: int, name: str, is_rare: bool,
