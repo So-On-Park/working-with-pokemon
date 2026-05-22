@@ -1,0 +1,61 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# --- Virtual envs ---
+.venv/
+venv/
+env/
+
+# --- Packaging / build ---
+build/
+dist/
+*.egg-info/
+*.egg
+
+# PyInstaller build folder is ignored; the .spec file IS tracked because
+# it defines the build recipe.
+!PokemonBuddy.spec
+
+# Distribution archives — they get rebuilt from sources, no need to track
+PokemonBuddy-*.zip
+
+# --- Test artifacts ---
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- Editors / IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- OS junk ---
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# --- Runtime ---
+debug.log
+*.log
+
+# --- Media recordings (use git-lfs or separate hosting for these) ---
+*.mp4
+*.mov
+*.webm
+*.avi
+
+# --- User data (never commit) ---
+# Per-install SQLite DB with the user's caught pokemon, party state, etc.
+# (Pattern is `dir/*` not `dir/` so the `!` re-include below works.)
+data/*
+!data/.gitkeep
+
+# Sprite cache (downloaded from PokeAPI on demand) + user-registered
+# custom pokemon + per-user display scale + name caches.
+assets/*
+!assets/.gitkeep

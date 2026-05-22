@@ -1,0 +1,3 @@
+@echo off
+echo Stopping Pokemon Buddy...
+"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -Command "$p = Get-CimInstance Win32_Process -Filter \"Name='pythonw.exe' OR Name='python.exe'\" | Where-Object { $_.CommandLine -like '*pokemon_buddy*' }; if ($p) { $p | ForEach-Object { Write-Host ('  killed PID ' + $_.ProcessId); Stop-Process -Id $_.ProcessId -Force } } else { Write-Host '  no running instance.' }"

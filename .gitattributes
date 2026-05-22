@@ -1,0 +1,24 @@
+# Normalize line endings on commit, check out per-OS.
+* text=auto
+
+# Source files always LF — even on Windows checkouts — so cross-platform
+# clones don't churn the index.
+*.py    text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+*.json  text eol=lf
+*.toml  text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+
+# Windows batch scripts must keep CRLF or cmd.exe chokes on them.
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# Binary — never try to diff or normalize these.
+*.gif   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.ico   binary
+*.db    binary
