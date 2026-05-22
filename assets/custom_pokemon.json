@@ -1,0 +1,60 @@
+{
+  "next_id": 9006,
+  "entries": {
+    "9001": {
+      "name_ko": "센몬",
+      "name_eng": "senmon",
+      "extra_motion": "9001_extra.gif",
+      "display_scale": 1.5,
+      "species_info": {
+        "weight_kg": 3.4,
+        "height_m": 0.6,
+        "gender_rate": 4
+      }
+    },
+    "9002": {
+      "name_ko": "쏘니",
+      "name_eng": "ssony",
+      "extra_motion": "9002_extra.gif",
+      "display_scale": 1,
+      "species_info": {
+        "weight_kg": 12.5,
+        "height_m": 0.7,
+        "gender_rate": 1
+      }
+    },
+    "9003": {
+      "name_ko": "후니",
+      "name_eng": "huni",
+      "extra_motion": "9003_extra.gif",
+      "display_scale": 1,
+      "species_info": {
+        "weight_kg": 23.6,
+        "height_m": 1.4,
+        "gender_rate": 0
+      }
+    },
+    "9004": {
+      "name_ko": "쪠리",
+      "name_eng": "zzery",
+      "extra_motion": null,
+      "display_scale": 1,
+      "species_info": {
+        "weight_kg": 39.6,
+        "height_m": 0.9,
+        "gender_rate": 7
+      }
+    },
+    "9005": {
+      "name_ko": "코기",
+      "name_eng": "kogi",
+      "extra_motion": null,
+      "display_scale": 1,
+      "species_info": {
+        "weight_kg": 8.7,
+        "height_m": 0.5,
+        "gender_rate": 4
+      }
+    }
+  }
+}

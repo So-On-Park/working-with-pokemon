@@ -152,6 +152,48 @@ def _refuse_prod_assets_under_pytest() -> None:
         )
 
 
+def _synth_species_info(dex_id: int) -> dict:
+    """Deterministic weight/height/gender_rate for a custom pokemon.
+    PokeAPI obviously can't serve these for user-created species, so we
+    fabricate plausible values seeded by dex_id. Stays stable across
+    restarts so a buddy never changes gender between sessions."""
+    import random as _r
+    rng = _r.Random(dex_id)
+    # Weight: 2.0–40.0 kg (covers small critters to medium-large)
+    weight = round(rng.uniform(2.0, 40.0), 1)
+    # Height: 0.3–1.5 m
+    height = round(rng.uniform(0.3, 1.5), 1)
+    # Gender rate: 0/1/2/4/6/7/8, weighted toward balanced. Exclude -1
+    # (genderless) so customs always have a gender — feels less sterile.
+    gender_rate = rng.choices(
+        [0, 1, 2, 4, 6, 7, 8],
+        weights=[1, 2, 3, 5, 3, 2, 1],
+        k=1,
+    )[0]
+    return {
+        "weight_kg": weight,
+        "height_m": height,
+        "gender_rate": gender_rate,
+    }
+
+
+def get_species_info(dex_id: int) -> Optional[dict]:
+    """Synthesised species info for a custom pokemon. Returns None if the
+    dex_id isn't registered as a custom. Lazily fills missing fields on
+    older entries (registered before this feature existed)."""
+    with _lock:
+        data = _load()
+        entry = data["entries"].get(str(dex_id))
+        if entry is None:
+            return None
+        if "species_info" not in entry:
+            # Backfill — older entries didn't carry this. Synthesise once,
+            # persist, then return.
+            entry["species_info"] = _synth_species_info(dex_id)
+            _save(data)
+        return entry["species_info"]
+
+
 def add(name_ko: str,
         gif_base_path: Path,
         gif_extra_path: Optional[Path] = None,
@@ -196,6 +238,7 @@ def add(name_ko: str,
             "name_eng": name_eng or f"custom{dex_id}",
             "extra_motion": extra_name,
             "display_scale": float(display_scale),
+            "species_info": _synth_species_info(dex_id),
         }
         data["next_id"] = dex_id + 1
         _save(data)

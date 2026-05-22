@@ -23,7 +23,6 @@ from PySide6.QtWidgets import (
 
 from .bag_dialog import BagPanel
 from .config import DIALOG_H, DIALOG_W
-from .daily_schedule_dialog import DailySchedulePanel
 from .dex_dialog import DexPanel
 from .inventory_dialog import InventoryPanel
 from .nav_bar import (
@@ -31,7 +30,6 @@ from .nav_bar import (
     NAV_INVENTORY,
     NAV_POKEMON,
     NAV_REMINDERS,
-    NAV_SCHEDULE,
     NavBar,
 )
 from .reminder_dialog import ReminderPanel
@@ -45,7 +43,6 @@ class MainPanel(QDialog):
     set_as_buddy = Signal(int)           # bag_id picked in BagPanel
     bag_changed = Signal()                # rename / release in BagPanel
     reminders_saved = Signal()            # ReminderPanel Save clicked
-    schedule_saved = Signal()             # DailySchedulePanel Save clicked
     use_item_requested = Signal(str)     # SPECIAL item 사용 clicked
     show_detail = Signal(int)            # bag_id — open PokemonDetailDialog
 
@@ -125,9 +122,6 @@ class MainPanel(QDialog):
         elif key == NAV_REMINDERS:
             panel = ReminderPanel(self.store)
             panel.saved.connect(self.reminders_saved)
-        elif key == NAV_SCHEDULE:
-            panel = DailySchedulePanel(self.store)
-            panel.saved.connect(self.schedule_saved)
         else:
             raise ValueError(f"unknown nav key: {key}")
         self._panels[key] = panel

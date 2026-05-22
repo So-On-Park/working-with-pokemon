@@ -21,7 +21,8 @@ NAV_POKEMON   = "pokemon"     # BagPanel ("내 포켓몬")
 NAV_INVENTORY = "inventory"   # InventoryPanel ("내 가방")
 NAV_DEX       = "dex"
 NAV_REMINDERS = "reminders"
-NAV_SCHEDULE  = "schedule"    # DailySchedulePanel — wall-clock 출근/점심/퇴근
+# NAV_SCHEDULE removed — the daily 출근/점심/퇴근 system is no longer
+# wired up. Only the user-driven reminder system remains.
 
 
 # (key, emoji, label) for the entries. Order = left-to-right display.
@@ -30,7 +31,6 @@ _NAV_ITEMS: List[Tuple[str, str, str]] = [
     (NAV_POKEMON,   "🐾", "내 포켓몬"),
     (NAV_DEX,       "📖", "도감"),
     (NAV_REMINDERS, "⏰", "리마인더"),
-    (NAV_SCHEDULE,  "📅", "일정"),
 ]
 
 

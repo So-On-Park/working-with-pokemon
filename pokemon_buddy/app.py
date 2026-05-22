@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import sys
 import logging
+from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtGui import QAction, QActionGroup, QIcon, QImageReader, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
+    QFileDialog,
     QInputDialog,
     QMenu,
     QMessageBox,
@@ -52,7 +54,6 @@ from .buddy_popup import (
 from .chatter import ChatterEngine
 from . import custom_pokemon
 from .custom_pokemon_dialog import CustomPokemonDialog
-from .daily_schedule import DailyScheduleEngine
 from .encounter import EncounterManager
 from .evolution import can_evolve, get_stone_evolution_target
 from .evolution_dialog import EvolutionDialog
@@ -139,6 +140,16 @@ class BuddyApp:
         self.qt_app = qt_app
         self.store = Store()
 
+        # First-run onboarding — must complete BEFORE we build any agents,
+        # because _build_agents_from_party() expects at least one bag entry.
+        # Existing users (installs predating onboarding) get grandfathered:
+        # if they already have a bag, we mark them as onboarded silently.
+        if not self.store.get_meta("onboarded"):
+            if self.store.list_bag():
+                self.store.set_meta("onboarded", "1")
+            else:
+                self._run_onboarding()
+
         stored_style = self.store.get_meta("sprite_style", DEFAULT_SPRITE_STYLE)
         self.sprite_style = self._normalize_style(stored_style)
         if stored_style != self.sprite_style:
@@ -203,12 +214,8 @@ class BuddyApp:
         self.item_drops.collected.connect(self.on_item_collected)
         self.item_drops.start()
 
-        # Wall-clock scheduled greetings — 출근 / 점심 / 퇴근.
-        self.schedule = DailyScheduleEngine(
-            self.store, lambda: self.primary.buddy, parent=qt_app,
-        )
-        self.schedule.fired.connect(self._on_scheduled_event)
-        self.schedule.start()
+        # Wall-clock greetings (출근/점심/퇴근) removed — only user-set
+        # reminders fire now. ReminderScheduler above is enough.
 
         primary.window.say("안녕! 같이 일하자 ✨", 3000)
         self._update_tray_status()
@@ -338,6 +345,35 @@ class BuddyApp:
             pass
 
     # ---- helpers ----
+    def _run_onboarding(self) -> None:
+        """Show the first-run dialog and seed the user's chosen starter.
+        Idempotent — guarded by the `onboarded` meta. Falls back to safe
+        defaults if the dialog is dismissed without a pick (the dialog
+        itself defaults adventurer_name and chosen_dex_id, so we just
+        commit whatever it returns)."""
+        from .onboarding_dialog import OnboardingDialog, STARTER_CHOICES
+        log.info("first-run onboarding starting")
+        dlg = OnboardingDialog(parent=None)
+        dlg.exec()
+        name = dlg.adventurer_name
+        dex_id = dlg.chosen_dex_id
+        species_name = dlg.chosen_name
+
+        self.store.set_meta("adventurer_name", name)
+
+        # Seed the starter individual + dex entry. add_to_bag already
+        # commits, so the next read sees the buddy as the active one.
+        buddy = self.store.add_to_bag(dex_id, is_rare=False)
+        self.store.set_meta("active_bag_id", str(buddy.bag_id))
+        self.store.save_active_party([buddy.bag_id])
+        self.store.record_catch(dex_id, species_name, is_rare=False)
+        # Populate the proper Korean name so the buddy doesn't show as
+        # "#0001" until PokeAPI is reached.
+        self.store.set_species_name(dex_id, species_name)
+
+        self.store.set_meta("onboarded", "1")
+        log.info("onboarded: name=%r starter=%d (%s)", name, dex_id, species_name)
+
     @staticmethod
     def _normalize_style(stored: Optional[str]) -> str:
         """Old DBs may have 'bw_shiny' / 'showdown_shiny' stored — collapse
@@ -351,8 +387,12 @@ class BuddyApp:
         return DEFAULT_SPRITE_STYLE
 
     # ---- tray ----
+    def _is_developer_mode(self) -> bool:
+        return self.store.get_meta("developer_mode") == "1"
+
     def _build_tray_menu(self) -> None:
         menu = QMenu()
+        dev = self._is_developer_mode()
 
         feed = QAction("밥 주기", menu)
         feed.triggered.connect(self.on_feed)
@@ -380,10 +420,6 @@ class BuddyApp:
         dex.triggered.connect(self.on_open_dex)
         menu.addAction(dex)
 
-        status = QAction("스탯 보기", menu)
-        status.triggered.connect(self.on_show_status)
-        menu.addAction(status)
-
         menu.addSeparator()
 
         style_menu = menu.addMenu("스프라이트 스타일")
@@ -399,9 +435,11 @@ class BuddyApp:
             self._style_group.addAction(act)
             style_menu.addAction(act)
 
-        bulk_act = QAction("에셋 일괄 다운로드 (Gen 1)", menu)
-        bulk_act.triggered.connect(self.on_start_bulk)
-        menu.addAction(bulk_act)
+        # Bulk download is a developer-mode-only convenience.
+        if dev:
+            bulk_act = QAction("에셋 일괄 다운로드 (Gen 1)", menu)
+            bulk_act.triggered.connect(self.on_start_bulk)
+            menu.addAction(bulk_act)
 
         menu.addSeparator()
 
@@ -409,19 +447,40 @@ class BuddyApp:
         reminders_act.triggered.connect(self.on_open_reminder_dialog)
         menu.addAction(reminders_act)
 
-        spawn_act = QAction("야생 포켓몬 소환 (테스트)", menu)
-        spawn_act.triggered.connect(self.on_force_encounter)
-        menu.addAction(spawn_act)
+        rename_adv_act = QAction("모험자 이름 변경…", menu)
+        rename_adv_act.triggered.connect(self.on_rename_adventurer)
+        menu.addAction(rename_adv_act)
 
         custom_act = QAction("커스텀 포켓몬 추가…", menu)
         custom_act.triggered.connect(self.on_add_custom_pokemon)
         menu.addAction(custom_act)
 
-        drop_act = QAction("아이템 떨어뜨리기 (테스트)", menu)
-        drop_act.triggered.connect(self.on_force_item_drop)
-        menu.addAction(drop_act)
+        # Test actions — hidden until the user toggles developer mode via
+        # the secret pokéball tap inside HelpDialog.
+        if dev:
+            spawn_act = QAction("야생 포켓몬 소환 (테스트)", menu)
+            spawn_act.triggered.connect(self.on_force_encounter)
+            menu.addAction(spawn_act)
+
+            drop_act = QAction("아이템 떨어뜨리기 (테스트)", menu)
+            drop_act.triggered.connect(self.on_force_item_drop)
+            menu.addAction(drop_act)
 
         menu.addSeparator()
+
+        help_act = QAction("기능 설명…", menu)
+        help_act.triggered.connect(self.on_show_help)
+        menu.addAction(help_act)
+
+        menu.addSeparator()
+
+        backup_act = QAction("백업하기…", menu)
+        backup_act.triggered.connect(self.on_create_backup)
+        menu.addAction(backup_act)
+
+        restore_act = QAction("백업 불러오기…", menu)
+        restore_act.triggered.connect(self.on_restore_backup)
+        menu.addAction(restore_act)
 
         reset_act = QAction("초기화…", menu)
         reset_act.triggered.connect(self.on_reset_data)
@@ -457,18 +516,6 @@ class BuddyApp:
         """Left-click on a buddy. Routed via agent's `pet_requested` so the
         right buddy gets the friendship bump."""
         agent.on_pet()
-
-    def on_show_status(self) -> None:
-        b = self.primary.buddy
-        text = (
-            f"{b.display_name}  ·  Lv.{b.level}\n"
-            f"종족 : {b.species_label}\n"
-            f"EXP : {b.exp} / {b.exp_to_next}\n"
-            f"친밀도 : {b.friendship} / 100\n"
-            f"기분 : {b.mood}"
-        )
-        QMessageBox.information(self.primary.window, "Pokemon Buddy", text)
-        self._update_tray_status()
 
     def on_quit(self) -> None:
         self._save_positions()
@@ -513,7 +560,6 @@ class BuddyApp:
                         parent=None)
         dlg.set_as_buddy.connect(self.on_swap_buddy)
         dlg.reminders_saved.connect(self.reminder_scheduler.check_now)
-        dlg.schedule_saved.connect(self.schedule.check_now)
         dlg.use_item_requested.connect(self.on_use_item)
         dlg.show_detail.connect(self.on_show_pokemon_detail)
         dlg.bag_changed.connect(self._on_bag_changed)
@@ -804,7 +850,7 @@ class BuddyApp:
             mp.refresh_bag()
         new_primary = self.primary
         new_primary.window.say(
-            f"이제부터 {new_primary.buddy.display_name}랑 함께! "
+            f"이제부터 {new_primary.buddy.display_name}(이)랑 함께! "
             f"Lv.{new_primary.buddy.level} 🎉",
             2800,
         )
@@ -845,6 +891,116 @@ class BuddyApp:
     def on_force_encounter(self) -> None:
         self.encounters.force_spawn()
 
+    def on_show_help(self) -> None:
+        """Open the feature reference dialog."""
+        from .help_dialog import HelpDialog
+        log.info("on_show_help")
+        dlg = HelpDialog(self.store, parent=None)
+        dlg.developer_mode_toggled.connect(self._on_developer_mode_toggled)
+        dlg.exec()
+
+    def _on_developer_mode_toggled(self, enabled: bool) -> None:
+        """HelpDialog's secret pokéball tap fired. Rebuild the tray menu
+        so the dev-only actions appear or disappear."""
+        log.info("developer mode %s — rebuilding tray menu", enabled)
+        self._build_tray_menu()
+
+    def on_rename_adventurer(self) -> None:
+        current = self.store.get_meta("adventurer_name") or ""
+        display = current if current else "(없음)"
+        new_name, ok = QInputDialog.getText(
+            None, "모험자 이름 변경",
+            f"현재 이름: {display}\n\n새 이름을 입력해줘 (비우면 기본값 '모험가'):",
+            text=current,
+        )
+        if not ok:
+            return
+        name = new_name.strip() or "모험가"
+        self.store.set_meta("adventurer_name", name)
+        log.info("adventurer renamed: %s -> %s", current, name)
+        self.primary.window.say(f"이제부터 {name}()이)라고 부를게! ✨", 2800)
+
+    # ---- backup / restore ----
+    def on_create_backup(self) -> None:
+        """Ask for a destination path, dump the user's state into a zip."""
+        from .backup import create_backup
+        import time as _t
+        default_name = f"pokemon-buddy-backup-{_t.strftime('%Y%m%d-%H%M%S')}.zip"
+        path, _ = QFileDialog.getSaveFileName(
+            None, "백업 저장 위치", default_name,
+            "All Files (*)",
+        )
+        if not path:
+            return
+        try:
+            info = create_backup(Path(path))
+        except Exception as exc:  # noqa: BLE001
+            log.exception("backup failed")
+            QMessageBox.critical(None, "백업 실패", f"백업 중 오류:\n{exc}")
+            return
+        size_kb = info["byte_size"] // 1024
+        log.info("backup created at %s (%d KB)", path, size_kb)
+        QMessageBox.information(
+            None, "백업 완료",
+            f"백업 파일이 저장됐어요.\n\n"
+            f"파일: {Path(path).name}\n"
+            f"크기: {size_kb} KB\n"
+            f"항목: {info['file_count']}개",
+        )
+
+    def on_restore_backup(self) -> None:
+        """Pick a backup file, confirm, restore in place, then quit so the
+        next launch reads the fresh DB."""
+        from .backup import inspect_backup, restore_backup
+        path, _ = QFileDialog.getOpenFileName(
+            None, "백업 파일 선택", "",
+            "All Files (*)",
+        )
+        if not path:
+            return
+        src = Path(path)
+        manifest = inspect_backup(src)
+        if manifest is None:
+            QMessageBox.warning(
+                None, "백업 파일 아님",
+                "선택한 파일이 Pokemon Buddy 백업이 아니에요.",
+            )
+            return
+        import datetime as _dt
+        created = _dt.datetime.fromtimestamp(
+            manifest.get("created_at", 0)
+        ).strftime("%Y-%m-%d %H:%M")
+        confirm = QMessageBox.question(
+            None, "백업 불러오기",
+            f"백업을 불러오면 현재 모든 진행도가 덮어써집니다.\n\n"
+            f"백업 시각: {created}\n"
+            f"항목 수: {manifest.get('file_count', '?')}개\n\n"
+            f"계속할까요? (앱이 자동으로 종료되며, 다시 실행하면 복원된 상태로 시작됩니다)"
+        )
+        if confirm != QMessageBox.Yes:
+            return
+        # Close store so SQLite handle is released before we overwrite the DB.
+        try:
+            self.store.close()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            restore_backup(src)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("restore failed")
+            QMessageBox.critical(
+                None, "복원 실패",
+                f"백업 복원 중 오류:\n{exc}\n\n"
+                f"DB가 손상됐을 수 있습니다. 앱을 다시 실행해보세요.",
+            )
+            return
+        log.info("backup restored from %s — quitting for clean reboot", path)
+        QMessageBox.information(
+            None, "복원 완료",
+            "백업을 불러왔어요. 앱을 종료할게요 — 다시 실행해주세요.",
+        )
+        self.qt_app.quit()
+
     def on_add_custom_pokemon(self) -> None:
         """Open the custom-pokemon registration dialog. On accept, copies
         the chosen GIF(s) into the assets dir under a freshly minted dex_id,
@@ -854,13 +1010,23 @@ class BuddyApp:
         was_visible = [(a, a.window.isVisible()) for a in self.agents]
         for agent in self.agents:
             agent.window.hide()
+        # Initialize OUTSIDE the try so a hiccup in the int()/enum compare
+        # below can't leave `accepted` undefined and crash the finally-then-
+        # `if not accepted` path with NameError. We had a silent crash here
+        # before — the int conversion or enum compare was raising and the
+        # function would just stop without registering the new pokemon.
+        accepted = False
         try:
             dlg = CustomPokemonDialog(parent=None)
             log.debug("about to call dlg.exec()")
             result = dlg.exec()
-            log.debug("dlg.exec() returned %r (Accepted=%r)",
-                     int(result), int(dlg.Accepted))
-            accepted = result == dlg.Accepted
+            log.debug("dlg.exec() returned: %s", result)
+            # Use the class attribute (1) so we don't depend on QDialog
+            # enum quirks across PySide6 versions.
+            accepted = (result == 1)
+            log.debug("accepted=%s", accepted)
+        except Exception:  # noqa: BLE001
+            log.exception("dlg.exec() flow raised")
         finally:
             log.debug("entering finally — restoring buddies")
             for agent, was_vis in was_visible:
@@ -904,8 +1070,9 @@ class BuddyApp:
     def on_reset_data(self) -> None:
         confirm = QMessageBox.question(
             self.primary.window, "초기화",
-            "모든 포켓몬·도감·가방 데이터를 지우고 새로 시작할까?\n"
-            "(리마인더와 창 위치는 유지)",
+            "모든 포켓몬·도감·가방·모험자 이름까지 지우고 처음부터 다시 시작할까?\n"
+            "(리마인더와 창 위치는 유지)\n\n"
+            "초기화 후엔 앱이 자동으로 종료돼. 다시 실행하면 포켓볼 선택부터 시작!",
         )
         if confirm != QMessageBox.Yes:
             return
@@ -913,11 +1080,19 @@ class BuddyApp:
         if mp is not None:
             mp.close()
         self.store.reset_all_data()
-        # Tear down all party windows and rebuild from the freshly-seeded
-        # starter party.
-        self._rebuild_agents()
-        self.primary.window.say("처음부터 다시 시작! ✨", 3000)
-        self.primary.anim.play("surprised")
+        # Release the SQLite handle so the next launch (which re-runs
+        # onboarding) opens a clean connection.
+        try:
+            self.store.close()
+        except Exception:  # noqa: BLE001
+            pass
+        log.info("reset complete — quitting for clean onboarding next launch")
+        QMessageBox.information(
+            None, "초기화 완료",
+            "초기화가 끝났어. 앱을 종료할게 — 다시 실행하면\n"
+            "모험자 이름 입력부터 다시 시작할 수 있어 ✨",
+        )
+        self.qt_app.quit()
 
     # ---- wild caught (rewards go to primary buddy) ----
     def on_wild_caught(self, dex_id: int, name: str, is_rare: bool,
