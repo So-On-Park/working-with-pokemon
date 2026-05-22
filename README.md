@@ -1,120 +1,150 @@
 # Pokemon Buddy
 
-데스크탑 위에서 살아 움직이는 포켓몬 친구. 우클릭으로 밥 주고, 놀아주고, 훈련시키며 함께 일하는 작은 펫 앱.
+> 어릴 때 몬스터볼 하나 품고 다니던 마음, 이제 데스크탑에 살짝 꺼내놓기. ✨
 
-![status](https://img.shields.io/badge/platform-Windows-blue) ![python](https://img.shields.io/badge/python-3.11%2B-green)
+![Windows](https://img.shields.io/badge/Windows-10%2F11-2563eb?style=for-the-badge&logo=windows)
+![Release](https://img.shields.io/badge/Release-v0.1.1-f97316?style=for-the-badge)
+![Pokemon](https://img.shields.io/badge/Desktop-Buddy-22c55e?style=for-the-badge)
 
-## 주요 기능
+Pokemon Buddy는 Windows 데스크탑 위에 포켓몬 친구들을 살짝 데려오는 작은 companion app이야. 🖥️
 
-- **파티 3마리까지** — 데스크탑에 동시에 띄울 수 있는 동료
-- **친밀도 + 경험치** — 함께한 시간이 쌓이면 레벨업 + 친밀도 상승, 진화 가능
-- **야생 인카운터** — 화면에 야생 포켓몬이 등장, 클릭해서 잡기. 가끔 레어 변종도 나옴
-- **아이템 시스템** — 가방에 떨어진 사과/장난감/몬스터볼 수집, 진화석 사용
-- **도감 + 가방** — Gen 1 + 사용자가 만든 커스텀까지 일관된 UI로 관리
-- **커스텀 포켓몬 등록** — 직접 그린 GIF로 나만의 종 추가 (자동으로 야생 풀에도 합류)
-- **모험자 이름** — 첫 실행 시 이름을 정하면 친구가 가끔 불러줘. 트레이 메뉴에서 언제든 변경
-- **리마인더** — 사용자가 원하는 시각·메시지 자유 설정
-- **두 가지 스프라이트 스타일** — BW 도트 / 쇼다운 애니메이션 토글
+일하는 동안 화면 위를 뽈뽈 돌아다니고, 가끔 말을 걸고, 아이템을 먹고, 친밀도와 경험치를 차곡차곡 쌓아요.
 
-## 요구사항
+야생 포켓몬을 만나 잡고, 도감을 채우고, 직접 만든 GIF 포켓몬까지 추가하면 내 데스크탑이 어느새 조그만 포켓몬 월드가 될걸?
 
-- **Windows 10/11**
-- **Python 3.11+** (3.14 권장)
-- 인터넷 연결 (PokeAPI 첫 fetch — 캐시 후엔 오프라인 동작)
+<p align="center">
+  <b>처음 켜면 모험자 이름을 정하고, 네 개의 포켓볼 중 하나를 고르게 돼. 🎒</b><br>
+  이상해씨? 파이리? 꼬부기? 피카츄? 열어보기 전까지는 아무도 모른다구.
+</p>
 
-## 설치
+<table align="center">
+  <tr>
+    <td align="center"><img src="assets/0001_showdown.gif" width="56" alt="이상해씨">
+    <td align="center"><img src="assets/0004_showdown.gif" width="56" alt="파이리">
+    <td align="center"><img src="assets/0007_showdown.gif" width="56" alt="꼬부기">
+    <td align="center"><img src="assets/0025_showdown.gif" width="56" alt="피카츄">
+  </tr>
+</table>
 
-```cmd
-git clone <REPO_URL> pokemon-buddy
-cd pokemon-buddy
-python -m venv .venv --copies
-.venv\Scripts\activate
-pip install -r requirements.txt
-```
+---
 
-> `--copies` 옵션은 venv launcher가 base Python을 자식 프로세스로 띄우는 동작을 피해 인스턴스가 1개만 떠도록 합니다.
+## 📦 Download
 
-## 실행
+가장 최신 버전은 여기서 받으면 돼.
 
-가장 간단한 방법:
+[Pokemon Buddy v0.1.1 다운로드](https://github.com/So-On-Park/working-with-pokemon/releases/tag/v0.1.1)
 
-```cmd
-run.bat
-```
+압축 풀고 `PokemonBuddy.exe` 딱 실행하면 끝. 설치 과정 없이 바로 모험 시작이야.
 
-종료:
+---
 
-```cmd
-stop.bat
-```
+## 🌈 이런 느낌
 
-`run.bat`은 `pythonw.exe`로 띄워 콘솔 창 없이 시스템 트레이에서 동작합니다. 트레이 아이콘 우클릭 → "종료".
+### 🏡 화면 위에 진짜로 사는 파티
 
-## 트레이 메뉴
+최대 세 마리의 포켓몬을 데스크탑에 꺼내둘 수 있어.
 
-| 항목 | 동작 |
-|------|------|
-| 밥 주기 / 놀아주기 / 훈련 | 친밀도·EXP 적립 |
-| 이름 변경 | 포켓몬 닉네임 설정/해제 |
-| 내 포켓몬 | 가방 + 파티 관리 |
-| 내 가방 | 인벤토리 — 진화석·물약·마스터볼 사용 |
-| 도감 | 잡은 포켓몬 컬렉션 |
-| 리마인더 설정 | 사용자 알람 관리 |
-| 모험자 이름 변경 | 친구가 부를 이름 변경 |
-| 커스텀 포켓몬 추가 | GIF로 새 종 등록 |
-| 기능 설명 | 모든 기능 한 눈에 |
+대표 포켓몬을 정하고, 파티원을 바꾸고, 우클릭으로 말 걸거나 아이템도 줄 수 있어.   
 
-## 커스텀 포켓몬 추가
+작업표시줄 안에 숨어있는 앱이 아니라, 화면 위에서 같이 하루를 보내는 진짜 작은 친구들이야.
 
-1. **GIF 준비** — 권장 128×128, 1MB 이하. 큰 GIF는 함께 제공되는 `pokemon-maker/optimize_pokemon_gifs.py`로 자동 최적화 가능
-2. 트레이 → **"커스텀 포켓몬 추가…"**
-3. 이름(한글) + 기본 GIF + (선택) 추가 모션 + 표시 크기 배율 입력
-4. **추가** 클릭 → 가방·도감·야생 풀에 동시 등록
+  
+### 💛 오늘 만난 애가 내 최애가 되는 순간
 
-등록된 포켓몬은 `assets/9001+_bw.gif` 등으로 저장되며 `assets/custom_pokemon.json`에 메타데이터가 기록됩니다.
+같이 시간을 보내고, 먹이를 주고, 놀아주면 친밀도와 경험치가 쌓여.
 
-## 테스트
+레벨업, 진화, 친밀도까지. 처음엔 그냥 귀여워서 꺼내놨는데,  
 
-```cmd
-.venv\Scripts\python -m pytest tests/ -q
-```
+어느 순간 얘 없으면 데스크탑이 살짝 허전해지는 그런 맛.
 
-87개 테스트 — 약 5초 안에 통과. 자세한 종류는 `tests/test_*.py` 참고.
+ 
+### 🌿 집중하다가 야생 포켓몬 등장
 
-## 로깅
+사용 중 화면에 야생 포켓몬이 툭 나타날 수 있어.  
 
-- **`debug.log`** (DEBUG 이상) — 시스템 동작 풀 트레이스. 버그 보고 시 마지막 ~50줄 첨부
-- **콘솔** (INFO 이상) — 사용자 액션만. `pythonw.exe`에서는 출력 없음 (정상)
+마우스 한 번으로 포획 도전. 처음 보는 포켓몬이면 도감이 반짝 채워지고, 
 
-## 데이터 위치
+특별한 포켓몬을 잡으면 파티 주변에 빵빠레가 톡톡 터져.
 
-| 경로 | 내용 | 이주 가능? |
-|------|------|------------|
-| `data/buddy.db` | 가방·도감·인벤토리·친밀도 등 모든 게임 상태 | 다른 PC로 복사 시 데이터 보존 |
-| `assets/*.gif` | PokeAPI 캐시 + 커스텀 GIF | 다운로드 다시 받으면 자동 채워짐 |
-| `assets/custom_pokemon.json` | 커스텀 포켓몬 메타 | 사용자 정의 — 따로 백업 권장 |
-| `assets/display_scale.json` | per-dex 표시 크기 배율 | 사용자 정의 |
-| `debug.log` | 런타임 로그 | 무시 가능 (재생성됨) |
+  
+### 🎁 줍고, 모으고, 누구한테 쓸지 고르기
 
-## 라이선스 + 스프라이트 출처
+화면 위에 떨어진 아이템을 주워 가방에 쏙 넣어둘 수 있어.  
 
-- 스프라이트는 [PokeAPI/sprites](https://github.com/PokeAPI/sprites) (Gen 5 BW) + [Pokemon Showdown](https://play.pokemonshowdown.com/) — 각 프로젝트의 라이선스에 따름
-- 커스텀 GIF는 사용자가 직접 제작/소유한 자산만 사용
-- 본 프로젝트 코드: TBD (배포 시 LICENSE 추가)
+먹이, 장난감, 회복 아이템, 특수 아이템까지.  
 
-## 문제 해결
+파티원이 여러 마리라면 “이건 누구한테 줄까?” 하고 직접 골라줄 수 있어.
 
-| 증상 | 원인 / 해결 |
-|------|------|
-| 트레이에 아이콘이 안 보임 | Windows 11은 새 트레이 아이콘을 ^(오버플로) 안에 숨김 등록 → 설정에서 ON |
-| 펫이 화면 밖으로 나감 | `stop.bat` 후 좌표 reset: `python -c "from pokemon_buddy.state import Store; s=Store(); s.conn.execute(\"DELETE FROM meta WHERE key LIKE 'win_%'\"); s.conn.commit()"` |
-| `pythonw.exe` 프로세스 2개 보임 | venv launcher + base interpreter 한 쌍. 실제 인스턴스는 1개 — 정상 |
-| 커스텀 추가 다이얼로그가 멈춤 | GIF가 너무 크면 미리보기 디코딩이 event loop을 점유. 권장 크기로 재최적화 |
+  
+### 📖 내 손으로 채우는 도감
 
-## 개발 노트
+만난 포켓몬과 잡은 포켓몬은 도감에서 확인할 수 있어.  
 
-- PySide6 (Qt 6.8+)
-- SQLite3 — 마이그레이션은 `_migrate_*` 메서드 체인으로
-- 모든 long-lived 매니저는 `parent=qt_app` 스코프 — party rebuild에 영향 없음
-- PetWindow는 `Qt.Tool + WindowStaysOnTopHint` (작업표시줄 비노출, 항상 위)
-- 다이얼로그는 `parent=None` + `WindowStaysOnTopHint` 권장 (Qt.Tool 부모 z-order 회피)
+기본 포켓몬뿐 아니라 직접 추가한 포켓몬도 도감에 함께 들어가.  
+
+남의 도감 말고, 내 손으로 채워가는 데스크탑 컬렉션.
+
+  
+### 🎨 내가 만든 포켓몬도 입주 가능
+
+직접 만든 GIF로 새로운 포켓몬을 등록할 수 있어.  
+
+기본 모션과 추가 모션을 넣어두면 내 포켓몬 가방과 도감에 쏙 들어가.  
+
+지금 포함된 커스텀 포켓몬도 함께 배포돼.
+
+<table align="center">
+  <tr>
+    <td align="center"><img src="assets/9001_bw.gif" width="64" alt="센몬"><br><b>센몬</b></td>
+    <td align="center"><img src="assets/9002_bw.gif" width="64" alt="쏘니"><br><b>쏘니</b></td>
+    <td align="center"><img src="assets/9003_bw.gif" width="64" alt="후니"><br><b>후니</b></td>
+    <td align="center"><img src="assets/9004_bw.gif" width="64" alt="쪠리"><br><b>쪠리</b></td>
+    <td align="center"><img src="assets/9005_bw.gif" width="64" alt="코기"><br><b>코기</b></td>
+  </tr>
+</table>
+
+### 💾 내 파티는 소중하니까
+
+내 포켓몬 상태, 파티, 도감, 가방, 커스텀 포켓몬 정보를 한 번에 백업해.  
+PC를 옮기거나, 초기화하기 전 상태를 보관하고 싶을 때 백업하기와 백업 불러오기를 쓰면 돼.
+
+### 🔔 버디가 챙겨주는 리마인드
+
+원하는 메시지와 주기로 리마인드를 설정할 수 있어.  
+물 마시기, 스트레칭, 눈 쉬기처럼 하루 중 은근히 놓치는 루틴 예시도 들어있어.  
+필요 없는 항목은 빼고, 내 리듬에 맞는 알림만 남겨두면 딱 좋을걸?
+
+---
+
+## ⭐ Main Features
+
+- 🖥️ 데스크탑 위에서 같이 지내는 포켓몬 파티
+- 💛 친밀도, 경험치, 레벨업, 진화까지 이어지는 성장
+- 🌿 야생 포켓몬 발견, 포획, 도감 등록
+- 🎁 아이템을 줍고 원하는 포켓몬에게 사용
+- 🎨 직접 만든 GIF로 커스텀 포켓몬 등록
+- 🔔 원하는 주기로 설정하는 리마인드 알림
+- 💾 내 포켓몬 상태 백업과 복원
+
+---
+
+## 🚀 시작하기
+
+1. 다운로드
+2. 압축 풀기
+3. `PokemonBuddy.exe` 실행
+4. 모험자 이름 입력
+5. 포켓볼 선택
+6. 첫 버디 등장
+
+---
+
+## 💌 For Adventurers
+
+Pokemon Buddy는 거창한 게임이라기보다, 매일 켜두는 작은 동료에 가까워.
+
+일하다가 한 번 쓰다듬고, 화면에 나타난 아이템을 줍고, 새로 만난 포켓몬을 잡고, 직접 만든 친구를 도감에 넣는 앱.
+
+생산성 앱인 척하지만 사실은 책상 위 작은 모험.
+
+켜두는 순간, 괜히 컴퓨터를 한 번 더 켜고 싶어질걸?
