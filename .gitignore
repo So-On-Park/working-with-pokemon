@@ -81,3 +81,7 @@ assets/*
 
 # Extracted release folders
 PokemonBuddy-*-win64/
+
+# Local archive — backups, recordings, old releases moved out of the way.
+# Personal / large / regenerable; never tracked.
+_archive/
