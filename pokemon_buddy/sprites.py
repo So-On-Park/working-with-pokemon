@@ -14,7 +14,7 @@ from typing import Iterable, Optional
 
 import requests
 
-from .config import ASSETS_DIR
+from .config import ASSETS_DIR, BUNDLED_ASSETS_DIR, CUSTOM_SPRITES_DIR
 
 log = logging.getLogger(__name__)
 
@@ -52,6 +52,17 @@ REQUEST_TIMEOUT = 4.0
 
 def _cache_path(dex_id: int, style: str, ext: str = "gif") -> Path:
     return ASSETS_DIR / f"{dex_id:04d}_{style}.{ext}"
+
+
+def _bundled(filename: str) -> Optional[Path]:
+    """A read-only seed asset shipped next to the install, if present. Lets
+    a sprite-bundled installer work offline even though the writable cache
+    (ASSETS_DIR) lives elsewhere. Returns None in dev (same dir) or when the
+    file isn't shipped."""
+    if BUNDLED_ASSETS_DIR.resolve() == ASSETS_DIR.resolve():
+        return None
+    p = BUNDLED_ASSETS_DIR / filename
+    return p if p.exists() else None
 
 
 def _try_download(url: str, dest: Path) -> bool:
@@ -113,6 +124,9 @@ def get_buddy_sprite(style: str, dex_id: int) -> Optional[Path]:
     cache = _cache_path(dex_id, style, "gif")
     if cache.exists():
         return cache
+    bundled = _bundled(f"{dex_id:04d}_{style}.gif")
+    if bundled is not None:
+        return bundled
     url = _url_for(style, dex_id)
     if url and _try_download(url, cache):
         return cache
@@ -131,10 +145,16 @@ def get_buddy_sprite_with_fallback(style: str, dex_id: int,
     # Just hit the local bw cache and bail.
     from . import custom_pokemon
     if custom_pokemon.is_custom(dex_id):
-        cache = _cache_path(dex_id, "bw", "gif")
+        # Custom sprites live under data/custom_sprites/ (user state).
+        cache = CUSTOM_SPRITES_DIR / f"{dex_id:04d}_bw.gif"
         if cache.exists():
             return cache
-        return None
+        # Fallback for pre-migration installs that still kept it in assets/.
+        legacy = _cache_path(dex_id, "bw", "gif")
+        if legacy.exists():
+            return legacy
+        # Last resort: a seed custom shipped with the install.
+        return _bundled(f"{dex_id:04d}_bw.gif")
 
     resolved = _resolve_style_key(style, is_rare)
     p = get_buddy_sprite(resolved, dex_id)
@@ -182,6 +202,9 @@ def get_item_sprite(slug: Optional[str]) -> Optional[Path]:
     cache = _item_cache_path(slug)
     if cache.exists():
         return cache
+    bundled = _bundled(f"item_{slug}.png")
+    if bundled is not None:
+        return bundled
     url = ITEM_SPRITE_URL.format(slug=slug)
     if _try_download(url, cache):
         return cache

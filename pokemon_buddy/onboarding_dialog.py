@@ -1,27 +1,28 @@
-"""First-run onboarding — the user picks an adventurer name and reaches
-into one of four pokéballs to receive a random starter.
+"""First-run onboarding — the user picks an adventurer name and chooses
+one of four pokéballs to receive their starter.
 
 Two pages in a QStackedWidget:
   1) Name input.
-  2) Four pokéball buttons. Clicking one reveals a random pick from
-     [이상해씨 #1, 파이리 #4, 꼬부기 #7, 피카츄 #25] with a small flourish,
-     then enables the "시작!" button.
+  2) Four pokéball buttons. Each ball is bound to a FIXED starter from
+     [이상해씨 #1, 파이리 #4, 꼬부기 #7, 피카츄 #25] (no randomness — the ball
+     you pick decides who you get). Clicking one reveals that starter as a
+     dark silhouette and asks "이 포켓몬으로 하시겠습니까?"; confirming reveals
+     the name and enables the "시작!" button.
 
 The dialog is intentionally unclosable mid-flow — it has no system close
 button and ignores Escape, so a fresh launch always ends with a complete
 seed. Cancelling on the very first step falls back to default values
-(name="모험가", random starter) so the user never gets a half-initialized
+(name="모험가", first starter) so the user never gets a half-initialized
 state if Qt itself terminates the dialog.
 """
 
 from __future__ import annotations
 
-import random
 from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont, QKeyEvent, QPixmap
+from PySide6.QtGui import QColor, QFont, QKeyEvent, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
@@ -33,7 +34,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .config import DEFAULT_SPRITE_STYLE
 from .pokeball import make_pokeball_pixmap
+from .sprites import get_buddy_sprite_with_fallback
 
 
 # The classic four — Bulbasaur / Charmander / Squirtle / Pikachu.
@@ -45,6 +48,32 @@ STARTER_CHOICES: list[tuple[int, str]] = [
 ]
 
 BALL_SIZE = 84
+REVEAL_PX = 80
+
+
+def _silhouette_pixmap(pm: QPixmap) -> QPixmap:
+    """Flatten a sprite to a dark silhouette (alpha kept as mask) so the
+    starter shows as a mystery shape before the user confirms the pick."""
+    out = QPixmap(pm.size())
+    out.fill(Qt.transparent)
+    p = QPainter(out)
+    p.drawPixmap(0, 0, pm)
+    p.setCompositionMode(QPainter.CompositionMode_SourceIn)
+    p.fillRect(out.rect(), QColor(38, 40, 58))
+    p.end()
+    return out
+
+
+def _starter_pixmap(dex_id: int, side: int) -> QPixmap:
+    """First frame of the starter's sprite, scaled to `side`. Empty pixmap
+    if no sprite is available (offline + uncached)."""
+    path = get_buddy_sprite_with_fallback(DEFAULT_SPRITE_STYLE, dex_id, False)
+    if path is None:
+        return QPixmap()
+    pm = QPixmap(str(path))
+    if pm.isNull():
+        return QPixmap()
+    return pm.scaled(side, side, Qt.KeepAspectRatio, Qt.SmoothTransformation)
 
 
 class _PokeballButton(QPushButton):
@@ -84,17 +113,16 @@ class OnboardingDialog(QDialog):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Pokemon Buddy — 모험 시작")
-        self.setMinimumSize(420, 360)
+        self.setMinimumSize(440, 480)
         self.setWindowFlag(Qt.WindowStaysOnTopHint, True)
         # No window close button — the user must finish the flow.
         self.setWindowFlag(Qt.WindowCloseButtonHint, False)
         self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
 
         self.adventurer_name: str = "모험가"
-        self.chosen_dex_id: int = random.choice([d for d, _ in STARTER_CHOICES])
-        self.chosen_name: str = next(
-            n for d, n in STARTER_CHOICES if d == self.chosen_dex_id
-        )
+        # Deterministic fallback (used only if the dialog is dismissed without
+        # a pick). Each pokéball maps to a FIXED starter — no random reroll.
+        self.chosen_dex_id, self.chosen_name = STARTER_CHOICES[0]
 
         root = QVBoxLayout(self)
         root.setSpacing(10)
@@ -178,44 +206,115 @@ class OnboardingDialog(QDialog):
         ball_row.addStretch(1)
         layout.addLayout(ball_row)
 
-        # Reveal area: appears only AFTER a ball is picked.
-        self.reveal_label = QLabel(
-            "✨ 어떤 친구가 나올까? 하나를 골라봐!"
-        )
+        # Silhouette preview — shows the mystery shape after a ball is picked,
+        # then the full-color sprite once the user confirms.
+        self.preview = QLabel()
+        self.preview.setAlignment(Qt.AlignCenter)
+        self.preview.setFixedHeight(REVEAL_PX + 8)
+        layout.addWidget(self.preview)
+
+        # Reveal/confirm text. Word-wrapped + tall enough so the line never
+        # clips (was cut at "모험을 시작해 보").
+        self.reveal_label = QLabel("✨ 어떤 친구가 나올까? 하나를 골라봐!")
         self.reveal_label.setAlignment(Qt.AlignCenter)
+        self.reveal_label.setWordWrap(True)
         self.reveal_label.setStyleSheet(
-            "color: #4a7ddc; font-size: 11pt; padding: 12px;"
+            "color: #4a7ddc; font-size: 11pt; padding: 8px;"
         )
-        self.reveal_label.setMinimumHeight(60)
+        self.reveal_label.setMinimumHeight(64)
         layout.addWidget(self.reveal_label)
 
         layout.addStretch(1)
+
+        # Confirm / retry row — shown only while a pick awaits confirmation.
+        confirm_row = QHBoxLayout()
+        confirm_row.addStretch(1)
+        self.retry_btn = QPushButton("다시 고를래")
+        self.retry_btn.setFixedSize(120, 34)
+        self.retry_btn.clicked.connect(self._on_retry_pick)
+        self.retry_btn.setVisible(False)
+        confirm_row.addWidget(self.retry_btn)
+        self.confirm_btn = QPushButton("응, 이 친구로!")
+        self.confirm_btn.setFixedSize(140, 34)
+        cf = QFont(); cf.setBold(True); cf.setPointSize(10)
+        self.confirm_btn.setFont(cf)
+        self.confirm_btn.clicked.connect(self._on_confirm_pick)
+        self.confirm_btn.setVisible(False)
+        confirm_row.addWidget(self.confirm_btn)
+        confirm_row.addStretch(1)
+        layout.addLayout(confirm_row)
+
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
         self.start_btn = QPushButton("시작!")
         self.start_btn.setFixedSize(140, 40)
         sf = QFont(); sf.setBold(True); sf.setPointSize(11)
         self.start_btn.setFont(sf)
-        self.start_btn.setEnabled(False)  # locked until a ball is picked
+        self.start_btn.setEnabled(False)  # locked until a pick is confirmed
         self.start_btn.clicked.connect(self._finish)
         btn_row.addWidget(self.start_btn)
         layout.addLayout(btn_row)
+
+        # The dex_id awaiting confirmation (None = nothing picked yet).
+        self._pending_dex_id: Optional[int] = None
+        self._pending_name: str = ""
         return page
 
     def _on_ball_picked(self, slot: int) -> None:
-        # Disable every ball so the user can't reroll.
+        # Disable every ball so the user can't reroll mid-decision.
         for b in self._ball_buttons:
             b.setEnabled(False)
-        # Random pick — the four balls are visually identical, but each
-        # click reaches into the same lucky-dip pool.
-        dex_id, name = random.choice(STARTER_CHOICES)
+        # Each ball is bound to a FIXED starter (no randomness) — the ball
+        # you pick decides who you get. Which is who stays hidden behind the
+        # silhouette until you confirm.
+        dex_id, name = STARTER_CHOICES[slot % len(STARTER_CHOICES)]
+        self._pending_dex_id = dex_id
+        self._pending_name = name
+
+        sprite = _starter_pixmap(dex_id, REVEAL_PX)
+        if not sprite.isNull():
+            self.preview.setPixmap(_silhouette_pixmap(sprite))
+        else:
+            self.preview.setText("❔")
+            f = QFont(); f.setPointSize(40)
+            self.preview.setFont(f)
+        self.reveal_label.setText(
+            "두근두근… 실루엣이 보여!\n이 포켓몬으로 하시겠습니까?"
+        )
+        self.confirm_btn.setVisible(True)
+        self.retry_btn.setVisible(True)
+        self.start_btn.setEnabled(False)
+
+    def _on_retry_pick(self) -> None:
+        # Re-open the lucky dip — clear the pending pick and let the user
+        # tap a ball again.
+        self._pending_dex_id = None
+        self._pending_name = ""
+        self.preview.clear()
+        self.confirm_btn.setVisible(False)
+        self.retry_btn.setVisible(False)
+        self.reveal_label.setText("✨ 다시 골라봐! 하나를 톡 눌러줘")
+        for b in self._ball_buttons:
+            b.setEnabled(True)
+
+    def _on_confirm_pick(self) -> None:
+        if self._pending_dex_id is None:
+            return
+        dex_id = self._pending_dex_id
+        name = self._pending_name
         self.chosen_dex_id = dex_id
         self.chosen_name = name
+        # Reveal the full-color sprite + name now that it's locked in.
+        sprite = _starter_pixmap(dex_id, REVEAL_PX)
+        if not sprite.isNull():
+            self.preview.setPixmap(sprite)
         self.reveal_label.setText(
-            f"🎉 #{dex_id:04d} <b>{name}</b>(이)가 나왔어!\n"
+            f"🎉 #{dex_id:04d} <b>{name}</b>(이)가 나왔어!<br>"
             f"<span style='color:#888; font-size:9pt;'>"
             f"{self.adventurer_name}님과 함께 모험을 시작해보자.</span>"
         )
+        self.confirm_btn.setVisible(False)
+        self.retry_btn.setVisible(False)
         self.start_btn.setEnabled(True)
 
     def _finish(self) -> None:

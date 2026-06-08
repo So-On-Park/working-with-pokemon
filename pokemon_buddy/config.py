@@ -1,23 +1,132 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
-# PyInstaller frozen mode: __file__ points inside the temporary MEIPASS
-# unpack dir, which gets wiped on app exit. Anything we write there
-# (buddy.db, downloaded sprites, custom_pokemon.json) would vanish next
-# run. Anchor user-writable directories next to the .exe instead.
+APP_DIR_NAME = "PokemonBuddy"
+
+
+def _user_base_dir() -> Path:
+    """Per-user, always-writable data root. Used by the FROZEN app so it
+    works no matter where it was installed — Program Files (read-only for
+    standard users), a per-user Programs dir, or a portable folder all share
+    one writable home under %LOCALAPPDATA%."""
+    if sys.platform == "win32":
+        base = os.environ.get("LOCALAPPDATA") or str(Path.home())
+    elif sys.platform == "darwin":
+        base = str(Path.home() / "Library" / "Application Support")
+    else:
+        base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+    return Path(base) / APP_DIR_NAME
+
+
+# Two anchors:
+#   INSTALL_DIR — where the program files live (next to the .exe when frozen;
+#                 the repo root in dev). Read-only under a Program Files
+#                 install. Holds the shipped seed assets (icon, custom seed).
+#   ROOT/BASE   — the writable home for all user state. Frozen → per-user
+#                 %LOCALAPPDATA%\PokemonBuddy; dev → the repo root so tests
+#                 and local runs keep using ./data and ./assets unchanged.
 if getattr(sys, "frozen", False):
-    ROOT = Path(sys.executable).resolve().parent
+    INSTALL_DIR = Path(sys.executable).resolve().parent
+    ROOT = _user_base_dir()
 else:
-    ROOT = Path(__file__).resolve().parent.parent
+    INSTALL_DIR = Path(__file__).resolve().parent.parent
+    ROOT = INSTALL_DIR
+
+# Shipped, read-only seed assets that ride along with the install (custom
+# pokemon the distributor bundled, etc.). In dev this equals ASSETS_DIR.
+BUNDLED_ASSETS_DIR = INSTALL_DIR / "assets"
 
 ASSETS_DIR = ROOT / "assets"
 DATA_DIR = ROOT / "data"
 DB_PATH = DATA_DIR / "buddy.db"
+# User-authored sprite cache (custom pokemon GIFs). Lives under data/ — the
+# only truly irreplaceable sprite art — so a distribution update that
+# overwrites assets/ (bundled + re-downloadable vanilla sprites) never wipes
+# the user's own creations. See migrate_user_data().
+CUSTOM_SPRITES_DIR = DATA_DIR / "custom_sprites"
 
 ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+CUSTOM_SPRITES_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _copy_if_absent(src: Path, dest: Path) -> None:
+    """Copy src→dest only when dest doesn't exist yet. Non-destructive and
+    idempotent; swallows IO errors so a locked/odd file never blocks boot."""
+    import shutil
+    try:
+        if src.is_file() and not dest.exists():
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src, dest)
+    except OSError:
+        pass
+
+
+def _relocate_irreplaceable_from(src_base: Path) -> None:
+    """Copy the irreplaceable user files out of a legacy layout rooted at
+    `src_base` (which has its own data/ + assets/) into the current writable
+    ROOT. Only the files that can't be re-downloaded are pulled — vanilla
+    PokeAPI sprite gifs are skipped (they re-fetch on demand)."""
+    src_data = src_base / "data"
+    src_assets = src_base / "assets"
+
+    # SQLite DB + JSON registries (old installs kept these under data/ or,
+    # even older, under assets/).
+    _copy_if_absent(src_data / "buddy.db", DB_PATH)
+    for fname in ("custom_pokemon.json", "display_scale.json"):
+        _copy_if_absent(src_data / fname, DATA_DIR / fname)
+        _copy_if_absent(src_assets / fname, DATA_DIR / fname)
+    # Offline name/info caches — nice to keep so names don't blank out offline.
+    for fname in ("names_ko.json", "names_eng.json", "names_info.json",
+                  "species_info.json"):
+        _copy_if_absent(src_assets / fname, ASSETS_DIR / fname)
+    # Custom pokemon sprites: from a modern data/custom_sprites/ or the older
+    # flat assets/ layout (dex_id >= 9001).
+    try:
+        legacy_custom = src_data / "custom_sprites"
+        if legacy_custom.is_dir():
+            for gif in legacy_custom.glob("*.gif"):
+                _copy_if_absent(gif, CUSTOM_SPRITES_DIR / gif.name)
+        if src_assets.is_dir():
+            for gif in src_assets.glob("*.gif"):
+                num = gif.stem.split("_", 1)[0]
+                if num.isdigit() and int(num) >= 9001:
+                    _copy_if_absent(gif, CUSTOM_SPRITES_DIR / gif.name)
+    except OSError:
+        pass
+
+
+def migrate_user_data() -> None:
+    """Make sure the writable ROOT holds the player's progress, no matter
+    which layout the previous version used. All copies are non-destructive
+    (skip when the destination already exists), so this is safe to call once
+    every launch.
+
+    Covers:
+      • Frozen installs: pull state out of the old exe-adjacent layout
+        (portable zip builds wrote data/ next to the .exe) and seed any
+        custom pokemon the distribution bundled under the install dir.
+      • Every mode: relocate user-authored files that older builds kept in
+        assets/ into data/ (the update-safe dir)."""
+    # 1) Frozen: legacy exe-adjacent data + bundled seed → %LOCALAPPDATA%.
+    if getattr(sys, "frozen", False):
+        if INSTALL_DIR.resolve() != ROOT.resolve():
+            _relocate_irreplaceable_from(INSTALL_DIR)
+
+    # 2) Any mode: assets/ → data/ relocation within ROOT (custom registry +
+    #    display scale + custom sprites authored by pre-data/ builds).
+    for fname in ("custom_pokemon.json", "display_scale.json"):
+        _copy_if_absent(ASSETS_DIR / fname, DATA_DIR / fname)
+    try:
+        for gif in ASSETS_DIR.glob("*.gif"):
+            num = gif.stem.split("_", 1)[0]  # "9001_bw" -> "9001"
+            if num.isdigit() and int(num) >= 9001:
+                _copy_if_absent(gif, CUSTOM_SPRITES_DIR / gif.name)
+    except OSError:
+        pass
 
 # Buddy display
 BUDDY_BOX_PX = 88
@@ -151,6 +260,16 @@ RARE_NAME_PREFIX = "레어"
 ITEM_DROP_CHECK_MS = 90_000          # poll every 90s
 ITEM_DROP_PROBABILITY = 0.45         # chance per poll
 ITEM_DROP_COOLDOWN_S = 75            # min seconds between drops
-ITEM_DROP_AUTO_FADE_MS = 5 * 60_000  # disappear after 5 min uncollected
+ITEM_DROP_AUTO_FADE_MS = 90_000      # disappear after 90s uncollected
 ITEM_DROP_MAX_ACTIVE = 3             # how many can sit on screen at once
 ITEM_DROP_SIZE_PX = 44               # window side (emoji icon size)
+
+# Skill scrolls — a rare "두루마리" (📜) drop. Rolled independently from the
+# normal item drop so it stays a genuine surprise. Collecting one banks a
+# skill teaching-scroll; using it teaches that skill to a chosen party member.
+SKILL_DROP_PROBABILITY = 0.012       # per poll, on top of the normal roll
+SKILL_DROP_AUTO_FADE_MS = 120_000    # scrolls linger a touch longer than items
+# Magnetize: a party member that knows 수집광 (collector) pulls a fresh drop
+# toward itself this long after it appears, then auto-collects it.
+MAGNETIZE_DELAY_MS = 2000
+MAGNETIZE_TRAVEL_MS = 650

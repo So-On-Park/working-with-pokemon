@@ -227,6 +227,38 @@ class PokemonDetailDialog(QDialog):
                        f"(다음까지 {buddy.friendship_xp}/{FRIENDSHIP_XP_PER_POINT})")
         inner_layout.addWidget(_row("친밀도", fr_text, value_color="#a04060"))
 
+        # Learned skills (기술) — compact value + ⓘ for the details, instead
+        # of a long inline hint.
+        from . import skills as _skills
+        from .info_icon import InfoIcon
+        learned = [s for s in (_skills.find(k) for k in buddy.learned_skills)
+                   if s is not None]
+        skill_w = QWidget()
+        skill_h = QHBoxLayout(skill_w)
+        skill_h.setContentsMargins(0, 0, 0, 0)
+        skill_h.setSpacing(8)
+        sk_key = QLabel("기술")
+        sk_key.setStyleSheet("color: #888; font-size: 9pt;")
+        sk_key.setFixedWidth(90)
+        skill_h.addWidget(sk_key)
+        if learned:
+            sk_val = QLabel("  ·  ".join(f"📜 {s.name}" for s in learned))
+            sk_val.setStyleSheet("color: #6f4cd6; font-size: 9pt;")
+            skill_h.addWidget(sk_val)
+            skill_h.addWidget(InfoIcon(
+                "\n".join(f"{s.name} — {s.description}" for s in learned)
+            ))
+        else:
+            sk_val = QLabel("아직 없음")
+            sk_val.setStyleSheet("color: #999; font-size: 9pt;")
+            skill_h.addWidget(sk_val)
+            skill_h.addWidget(InfoIcon(
+                "기술 교본(📜)을 전수하거나, 친밀도가 100인 친구가 "
+                "레벨업하면 기술을 배워."
+            ))
+        skill_h.addStretch(1)
+        inner_layout.addWidget(skill_w)
+
         # Weight + height from PokeAPI (cached). Offline → "확인 불가".
         info = pokemon_info.get_species_info(buddy.dex_id)
         if info is not None:
@@ -281,13 +313,13 @@ class PokemonDetailDialog(QDialog):
         scale_label.setFixedWidth(90)
         scale_row.addWidget(scale_label)
         self._scale_spin = QDoubleSpinBox()
-        self._scale_spin.setRange(0.5, 2.5)
+        self._scale_spin.setRange(0.5, 3.0)
         self._scale_spin.setSingleStep(0.1)
         self._scale_spin.setDecimals(2)
         self._scale_spin.setValue(_display_scale.get(buddy.dex_id))
         self._scale_spin.setToolTip(
-            "캐릭터가 작으면 1.3~1.8, 너무 크면 0.7~0.9. 기본 1.0. "
-            "변경 즉시 데스크탑 펫에 반영돼."
+            "캐릭터가 작으면 1.3~1.8, 너무 크면 0.7~0.9. 기본 1.0, 최대 3.0. "
+            "변경 즉시 데스크탑 펫에 반영돼 (창도 함께 커져서 잘리지 않아)."
         )
         self._scale_spin.valueChanged.connect(self._on_scale_changed)
         scale_row.addWidget(self._scale_spin)

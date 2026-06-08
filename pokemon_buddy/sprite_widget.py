@@ -98,6 +98,14 @@ class SpriteWidget(QWidget):
         self._update_base_scale()
         self.update()
 
+    def set_box(self, box_px: int) -> None:
+        """Resize the drawing box. The sprite is drawn centered using the
+        widget's current size, so growing the box gives a large scale the
+        room it needs instead of clipping at the window edge."""
+        self._box_px = int(box_px)
+        self.setFixedSize(self._box_px, self._box_px)
+        self.update()
+
     def _dispose_movie(self) -> None:
         if self._movie is not None:
             try:

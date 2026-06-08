@@ -1,2 +1,4 @@
 """Pokemon Buddy - desktop pet that lives on your work screen."""
-__version__ = "0.1.0"
+# Single source of truth for the app version. Keep installer.iss's
+# MyAppVersion in sync when bumping this.
+__version__ = "1.2.1"

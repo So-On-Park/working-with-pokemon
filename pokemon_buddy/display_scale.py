@@ -23,11 +23,12 @@ import logging
 import threading
 from typing import Dict
 
-from .config import ASSETS_DIR
+from .config import DATA_DIR
 
 log = logging.getLogger(__name__)
 
-REGISTRY_PATH = ASSETS_DIR / "display_scale.json"
+# Lives under data/ (user state) — see config.migrate_user_data().
+REGISTRY_PATH = DATA_DIR / "display_scale.json"
 
 _lock = threading.Lock()
 _cache: Dict[str, float] | None = None

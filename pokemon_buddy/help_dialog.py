@@ -44,9 +44,16 @@ SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
         ("커스텀 포켓몬", "직접 등록한 친구도 야생에서 만날 수 있어"),
     ]),
     ("🎒 아이템", [
-        ("아이템 드롭", "화면에 사과·장난감·몬스터볼이 떨어져 — 클릭해서 줍기"),
+        ("아이템 드롭", "화면에 사과·장난감·몬스터볼이 떨어져 — 클릭해서 줍기 (잠깐 머물다 사라져)"),
         ("특수 아이템", "물약, 진화석, 마스터볼 같은 것들 — 트레이 → 내 가방 → 사용"),
         ("적용 대상", "파티가 여러 마리면 누구에게 쓸지 선택할 수 있어"),
+        ("표시 켜기/끄기", "트레이 → '화면 아이템 표시'로 드롭을 끄고 켤 수 있어 (가방은 그대로)"),
+    ]),
+    ("📜 기술 (스킬)", [
+        ("기술 교본", "아주 가끔 두루마리(📜)가 떨어져 — 주워서 내 가방에 보관"),
+        ("전수", "내 가방 → 교본의 '전수' 버튼으로 파티원에게 기술을 가르쳐"),
+        ("유대로 습득", "친밀도가 100인 친구는 레벨업할 때 스스로 기술을 깨우쳐"),
+        ("수집광", "이 기술을 지닌 친구는 화면에 떨어진 아이템을 끌어당겨 자동으로 주워와"),
     ]),
     ("👥 파티 관리", [
         ("최대 3마리", "동시에 데스크탑에 띄울 수 있는 친구 수"),
@@ -82,7 +89,8 @@ class HelpDialog(QDialog):
 
     def __init__(self, store, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Pokemon Buddy — 기능 설명")
+        from . import __version__
+        self.setWindowTitle(f"Pokemon Buddy v{__version__} — 기능 설명")
         self.setMinimumSize(520, 600)
         self.setWindowFlag(Qt.WindowStaysOnTopHint, True)
 

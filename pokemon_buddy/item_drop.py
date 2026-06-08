@@ -34,12 +34,17 @@ from .config import (
     ITEM_DROP_MAX_ACTIVE,
     ITEM_DROP_PROBABILITY,
     ITEM_DROP_SIZE_PX,
+    MAGNETIZE_DELAY_MS,
+    MAGNETIZE_TRAVEL_MS,
+    SKILL_DROP_AUTO_FADE_MS,
+    SKILL_DROP_PROBABILITY,
 )
 from .items import (
     DROP_WEIGHTS,
     ItemDef,
     ItemKind,
     SPECIAL_DROP_WEIGHTS,
+    find as find_item,
     items_of,
 )
 from .pokeball import make_pokeball_pixmap
@@ -69,8 +74,10 @@ class ItemDropWindow(QWidget):
 
     clicked = Signal()
     expired = Signal()
+    magnetized = Signal()  # arrived at a collector buddy → auto-collect
 
-    def __init__(self, item: ItemDef, parent: QWidget | None = None) -> None:
+    def __init__(self, item: ItemDef, parent: QWidget | None = None,
+                 auto_fade_ms: int = ITEM_DROP_AUTO_FADE_MS) -> None:
         super().__init__(
             None,
             Qt.FramelessWindowHint
@@ -120,7 +127,7 @@ class ItemDropWindow(QWidget):
         self._auto_fade = QTimer(self)
         self._auto_fade.setSingleShot(True)
         self._auto_fade.timeout.connect(self._on_auto_fade)
-        self._auto_fade.start(ITEM_DROP_AUTO_FADE_MS)
+        self._auto_fade.start(auto_fade_ms)
 
         # Subtle horizontal sway on the label only — the widget (and its
         # click-target rect) stays put. Animation ranges ±2px and runs at
@@ -161,6 +168,29 @@ class ItemDropWindow(QWidget):
             self._auto_fade.stop()
             self.clicked.emit()
 
+    # ---- magnetize (수집광) ----
+    def magnet_to(self, target_center: QPoint) -> bool:
+        """Slide this drop toward `target_center` (a buddy that knows 수집광),
+        then emit `magnetized` so the manager auto-collects it. No-op if the
+        drop was already clicked/expired. Returns True if travel started."""
+        if self._resolved:
+            return False
+        self._resolved = True
+        self._auto_fade.stop()
+        if hasattr(self, "_sway"):
+            self._sway.stop()
+        dest = QPoint(target_center.x() - self.width() // 2,
+                      target_center.y() - self.height() // 2)
+        anim = QPropertyAnimation(self, b"pos", self)
+        anim.setStartValue(self.pos())
+        anim.setEndValue(dest)
+        anim.setDuration(MAGNETIZE_TRAVEL_MS)
+        anim.setEasingCurve(QEasingCurve.InCubic)
+        anim.finished.connect(self.magnetized.emit)
+        anim.start()
+        self._magnet_anim = anim
+        return True
+
     # ---- fade out ----
     def fade_and_close(self, on_done) -> None:
         # Stop the sway so it doesn't keep nudging the label while we fade.
@@ -197,6 +227,11 @@ class ItemDropManager(QObject):
         self._active: List[ItemDropWindow] = []
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
+        self._enabled = True
+        # Set by BuddyApp: returns a list of QPoint centers for party members
+        # that know 수집광. Drops drift to the nearest one shortly after they
+        # appear. None / empty list = no magnet behaviour.
+        self.magnet_provider = None
 
     # ---- lifecycle ----
     def start(self) -> None:
@@ -206,10 +241,21 @@ class ItemDropManager(QObject):
 
     def stop(self) -> None:
         self._timer.stop()
+        self._clear_active()
+
+    def _clear_active(self) -> None:
         for w in list(self._active):
             w.hide()
             w.deleteLater()
         self._active.clear()
+
+    def set_enabled(self, enabled: bool) -> None:
+        """User toggle (화면 아이템 표시). When off, stop spawning and clear
+        anything currently on screen. Polling timer keeps running so flipping
+        it back on resumes immediately."""
+        self._enabled = bool(enabled)
+        if not self._enabled:
+            self._clear_active()
 
     def force_spawn(self) -> bool:
         return self._spawn(ignore_cooldown=True)
@@ -217,14 +263,23 @@ class ItemDropManager(QObject):
     # ---- polling ----
     def _tick(self) -> None:
         # Locked screen → no drops; the user won't see them and they'd
-        # just expire silently.
-        if is_screen_locked():
+        # just expire silently. Also honour the user's display toggle.
+        if is_screen_locked() or not self._enabled:
             return
+        # Independent rare roll for a skill teaching scroll (두루마리).
+        if random.random() < SKILL_DROP_PROBABILITY:
+            scroll = find_item("skill.collector")
+            if scroll is not None and self._spawn(ignore_cooldown=False,
+                                                  item=scroll):
+                return
         if random.random() >= ITEM_DROP_PROBABILITY:
             return
         self._spawn(ignore_cooldown=False)
 
-    def _spawn(self, ignore_cooldown: bool) -> bool:
+    def _spawn(self, ignore_cooldown: bool,
+               item: Optional[ItemDef] = None) -> bool:
+        if not self._enabled:
+            return False
         if len(self._active) >= ITEM_DROP_MAX_ACTIVE:
             self.skipped.emit("max-active")
             return False
@@ -239,8 +294,11 @@ class ItemDropManager(QObject):
                 self.skipped.emit("cooldown")
                 return False
 
-        item = _pick_random_item()
-        win = ItemDropWindow(item)
+        if item is None:
+            item = _pick_random_item()
+        fade = (SKILL_DROP_AUTO_FADE_MS if item.kind == ItemKind.SKILL
+                else ITEM_DROP_AUTO_FADE_MS)
+        win = ItemDropWindow(item, auto_fade_ms=fade)
 
         # Place on the screen that contains the buddy, not always primary.
         anchor = self.buddy_widget.frameGeometry()
@@ -251,12 +309,42 @@ class ItemDropManager(QObject):
 
         win.clicked.connect(lambda w=win: self._on_collected(w))
         win.expired.connect(lambda w=win: self._on_expired(w))
+        win.magnetized.connect(lambda w=win: self._on_magnet_arrived(w))
 
         self._active.append(win)
         win.show()
         self.spawned.emit(win)
         self.store.set_meta("last_item_drop_at", str(time.time()))
+        # A 수집광 buddy reels the drop in shortly after it lands.
+        QTimer.singleShot(MAGNETIZE_DELAY_MS, lambda w=win: self._try_magnet(w))
         return True
+
+    # ---- magnetize ----
+    def _try_magnet(self, win: ItemDropWindow) -> None:
+        if win not in self._active or win._resolved:
+            return
+        if self.magnet_provider is None:
+            return
+        try:
+            targets = self.magnet_provider() or []
+        except Exception:  # noqa: BLE001
+            targets = []
+        if not targets:
+            return
+        center = win.frameGeometry().center()
+
+        def _dist2(pt: QPoint) -> int:
+            dx = pt.x() - center.x()
+            dy = pt.y() - center.y()
+            return dx * dx + dy * dy
+
+        nearest = min(targets, key=_dist2)
+        win.magnet_to(nearest)
+
+    def _on_magnet_arrived(self, win: ItemDropWindow) -> None:
+        key = win.item.key
+        self._cleanup(win)
+        self.collected.emit(key)
 
     def _on_collected(self, win: ItemDropWindow) -> None:
         key = win.item.key

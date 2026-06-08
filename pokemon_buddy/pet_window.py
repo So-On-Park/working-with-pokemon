@@ -20,7 +20,9 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QWidget
 
-from .config import BUDDY_BOX_PX, SPEECH_BUBBLE_PX
+import math
+
+from .config import BUDDY_BOX_PX, SPEECH_BUBBLE_PX, TARGET_DISPLAY_PX
 from .speech_bubble import SpeechBubble
 from .sprite_widget import SpriteWidget
 
@@ -75,6 +77,7 @@ class PetWindow(QWidget):
         self.setAttribute(Qt.WA_AlwaysShowToolTips, True)
 
         box = BUDDY_BOX_PX
+        self._box = box
         self.resize(box, box)
 
         # Sprite widget fills the window
@@ -100,6 +103,32 @@ class PetWindow(QWidget):
             self.sprite.set_gif(Path(path))
         else:
             self.sprite.set_static(QPixmap(str(path)))
+
+    # ---- display scale ----
+    @staticmethod
+    def _box_for_scale(scale: float) -> int:
+        """Window side needed so a sprite at the given display scale isn't
+        clipped. The sprite's long edge renders at TARGET_DISPLAY_PX * scale;
+        the 1.45 headroom leaves room for the action animations (surprise pop
+        ≈ 1.25×, happy bob, dx/dy nudges). Never shrinks below the default."""
+        needed = int(math.ceil(TARGET_DISPLAY_PX * max(0.1, scale) * 1.45))
+        return max(BUDDY_BOX_PX, needed)
+
+    def set_display_scale(self, scale: float) -> None:
+        """Apply a per-dex display scale: push it into the sprite AND resize
+        the window so larger scales get the room they need. The window grows
+        about its own center so the buddy stays put on screen."""
+        self.sprite.set_scale_override(scale)
+        box = self._box_for_scale(scale)
+        if box == self._box:
+            return
+        center = self.frameGeometry().center()
+        self._box = box
+        self.sprite.set_box(box)
+        self.sprite.move(0, 0)
+        self.resize(box, box)
+        self.move(center.x() - box // 2, center.y() - box // 2)
+        self._bubble.update_anchor(self.frameGeometry())
 
     # ---- speech bubble ----
     def say(self, text: str, ms: int = 2500) -> None:

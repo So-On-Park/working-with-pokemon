@@ -194,6 +194,15 @@ class BuddyApp:
         self.tick.timeout.connect(self._on_tick)
         self.tick.start(TICK_MS)
 
+        # Keep the buddies floating above other windows. Even with
+        # WindowStaysOnTopHint set, clicking another app can shuffle the
+        # buddy down within the topmost band so it slips behind the taskbar.
+        # A gentle periodic re-raise re-asserts the top spot. (raise_() on a
+        # WA_ShowWithoutActivating Qt.Tool window doesn't steal focus.)
+        self.zorder_timer = QTimer(qt_app)
+        self.zorder_timer.timeout.connect(self._reassert_topmost)
+        self.zorder_timer.start(4000)
+
         # Reminder + encounter + drop + schedule engines route through the
         # PRIMARY buddy only — keeps the soundscape from drowning the user
         # with three buddies saying the same lunch reminder.
@@ -212,6 +221,10 @@ class BuddyApp:
         self.item_drops = ItemDropManager(self.store, primary.window,
                                           parent=qt_app)
         self.item_drops.collected.connect(self.on_item_collected)
+        # 수집광 magnet: drops drift to the nearest party member that knows it.
+        self.item_drops.magnet_provider = self._collector_targets
+        # Respect the user's "화면 아이템 표시" toggle (default on).
+        self.item_drops.set_enabled(self._items_visible())
         self.item_drops.start()
 
         # Wall-clock greetings (출근/점심/퇴근) removed — only user-set
@@ -443,6 +456,14 @@ class BuddyApp:
 
         menu.addSeparator()
 
+        items_act = QAction("화면 아이템 표시", menu)
+        items_act.setCheckable(True)
+        items_act.setChecked(self._items_visible())
+        items_act.toggled.connect(self.on_toggle_items_visible)
+        menu.addAction(items_act)
+
+        menu.addSeparator()
+
         reminders_act = QAction("리마인더 설정…", menu)
         reminders_act.triggered.connect(self.on_open_reminder_dialog)
         menu.addAction(reminders_act)
@@ -505,9 +526,14 @@ class BuddyApp:
     # (popup is per-buddy). The tray menu uses the primary by default.
     def on_feed(self, agent: Optional[BuddyAgent] = None) -> None:
         (agent or self.primary).on_feed()
+        # Feeding consumes a food item — refresh any open 내 가방 tab so the
+        # count drops immediately instead of staying stale until reopened.
+        self._refresh_main_inventory()
 
     def on_play(self, agent: Optional[BuddyAgent] = None) -> None:
         (agent or self.primary).on_play()
+        # Playing consumes a toy — keep the inventory tab in sync live.
+        self._refresh_main_inventory()
 
     def on_train(self, agent: Optional[BuddyAgent] = None) -> None:
         (agent or self.primary).on_train()
@@ -679,11 +705,60 @@ class BuddyApp:
         if item is None:
             return
         self.store.add_item(item_key, 1)
-        self.primary.window.say(f"{item.emoji} {item.label} 획득!", 2000)
+        if item.kind == ItemKind.SKILL:
+            self.primary.window.say(
+                f"📜 {item.label} 획득! 가방에서 포켓몬에게 전수할 수 있어 ✨",
+                3200,
+            )
+        else:
+            self.primary.window.say(f"{item.emoji} {item.label} 획득!", 2000)
         self.primary.anim.play("happy")
+        self._refresh_main_inventory()
 
     def on_needs_pokeball(self) -> None:
         self.primary.window.say("몬스터볼이 없어! 🔴 모아야 해…", 2400)
+
+    # ---- skills (수집광) ----
+    def _collector_targets(self):
+        """Centers of party members that know 수집광 — the magnet provider
+        the ItemDropManager pulls drops toward."""
+        from . import skills
+        out = []
+        for agent in self.agents:
+            try:
+                if (agent.buddy.has_skill(skills.SKILL_COLLECTOR)
+                        and agent.window.isVisible()):
+                    out.append(agent.window.frameGeometry().center())
+            except RuntimeError:
+                pass
+        return out
+
+    def _maybe_autolearn_skill(self, agent: BuddyAgent) -> None:
+        """Bond mastery: a buddy at full friendship (100) auto-learns 수집광
+        the next time it levels up — no scroll required."""
+        from . import skills
+        b = agent.buddy
+        if b.friendship < 100:
+            return
+        if b.has_skill(skills.SKILL_COLLECTOR):
+            return
+        if self.store.learn_skill(b.bag_id, skills.SKILL_COLLECTOR):
+            agent.reload_buddy()
+            sk = skills.find(skills.SKILL_COLLECTOR)
+            QTimer.singleShot(2600, lambda: agent.window.say(
+                f"💞 깊은 유대로 「{sk.name}」을(를) 깨우쳤어!", 3200,
+            ))
+
+    # ---- item display toggle (항목8) ----
+    def _items_visible(self) -> bool:
+        return self.store.get_meta("items_visible", "1") != "0"
+
+    def on_toggle_items_visible(self, visible: bool) -> None:
+        self.store.set_meta("items_visible", "1" if visible else "0")
+        self.item_drops.set_enabled(visible)
+        msg = ("화면 아이템 표시를 켰어 ✨" if visible
+               else "화면 아이템 표시를 껐어. 가방은 그대로야 👍")
+        self.primary.window.say(msg, 2200)
 
     def on_show_pokemon_detail(self, bag_id: int) -> None:
         """Open the read-only detail dialog for a specific bag entry. Parent
@@ -701,7 +776,7 @@ class BuddyApp:
         the user sees the size change without restarting."""
         for agent in self.agents:
             if agent.buddy.dex_id == dex_id:
-                agent.window.sprite.set_scale_override(scale)
+                agent.window.set_display_scale(scale)
 
     # ---- using special items ----
     def on_use_item(self, item_key: str) -> None:
@@ -786,6 +861,44 @@ class BuddyApp:
             self._do_evolve_agent(target, target_dex, new_species)
             self._refresh_main_inventory()
             return
+
+        # Skill teaching scroll (두루마리) — teach the technique to the chosen
+        # party member.
+        if item.kind == ItemKind.SKILL:
+            from . import skills
+            skill = skills.skill_for_item(item_key)
+            if skill is None:
+                return
+            if target.buddy.has_skill(skill.key):
+                target.window.say(
+                    f"{target.buddy.display_name}은(는) 이미 {skill.name}을(를) 배웠어!",
+                    2400,
+                )
+                return
+            if not self.store.consume_item(item_key, 1):
+                target.window.say("아이템이 없어!", 1800)
+                return
+            self.store.learn_skill(target.buddy.bag_id, skill.key)
+            target.reload_buddy()
+            target.window.say(
+                f"📜 {target.buddy.display_name}이(가) 「{skill.name}」을(를) 배웠다!",
+                3200,
+            )
+            target.anim.play("surprised")
+            self._refresh_main_inventory()
+            return
+
+        # Friendship potions are wasted on a maxed buddy — refuse before we
+        # consume the item or claim "+N" (친밀도 100인데도 쓸 수 있던 버그).
+        if item_key in ("special.potion", "special.super-potion",
+                        "special.hyper-potion"):
+            fresh = self.store.get_bag_entry(target.buddy.bag_id)
+            if fresh is not None and fresh.friendship >= 100:
+                target.window.say(
+                    f"{target.buddy.display_name}의 친밀도는 이미 최고치(100)야! 💯",
+                    2600,
+                )
+                return
 
         if not self.store.consume_item(item_key, 1):
             log.debug("consume_item failed for key=%s", item_key)
@@ -1168,6 +1281,8 @@ class BuddyApp:
     def _on_agent_leveled_up(self, agent: BuddyAgent) -> None:
         """Each agent emits this when its buddy levels up. We defer the
         evolution dialog by 1.5s so the surprise pop + halo can land first."""
+        # Bond mastery: a fully-bonded buddy learns 수집광 on level-up.
+        self._maybe_autolearn_skill(agent)
         QTimer.singleShot(1500, lambda: self._maybe_offer_evolution(agent))
 
     def _maybe_offer_evolution(self, agent: BuddyAgent) -> None:
@@ -1233,6 +1348,18 @@ class BuddyApp:
             agent.apply_passive_gain()
         self._update_tray_status()
 
+    def _reassert_topmost(self) -> None:
+        """Re-raise visible buddies so other windows can't push them under
+        the taskbar. Best-effort — skipped while the screen is locked."""
+        if is_screen_locked():
+            return
+        for agent in self.agents:
+            try:
+                if agent.window.isVisible():
+                    agent.window.raise_()
+            except RuntimeError:
+                pass
+
     # ---- tray helpers ----
     def _update_tray_status(self) -> None:
         b = self.primary.buddy
@@ -1283,6 +1410,15 @@ def main() -> int:
     )
 
     _set_windows_app_id(APP_ID)
+
+    # Relocate any user-authored files left in assets/ by older builds into
+    # data/ so this (and future) updates keep the player's progress even if
+    # the distribution ships/overwrites assets/.
+    from .config import migrate_user_data
+    try:
+        migrate_user_data()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("user-data migration skipped: %s", exc)
 
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
