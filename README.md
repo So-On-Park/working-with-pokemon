@@ -176,3 +176,19 @@ Pokemon Buddy는 거창한 게임이라기보다, 매일 켜두는 작은 동료
 생산성 앱인 척하지만 사실은 책상 위 작은 모험.
 
 켜두는 순간, 괜히 컴퓨터를 한 번 더 켜고 싶어질걸?
+
+---
+
+## 📜 저작권 · 크레딧
+
+Pokemon Buddy는 **비영리 팬 메이드 프로젝트**예요.
+
+**Pokémon**, 포켓몬 이름, 모든 포켓몬 스프라이트의 저작권·상표권은
+**Nintendo / Game Freak / Creatures Inc. / The Pokémon Company** 에 있고,
+이 프로젝트는 위 회사들과 **제휴·후원·승인 관계가 없어요.**
+
+스프라이트는 [PokéAPI/sprites](https://github.com/PokeAPI/sprites)(CC0, 이미지 저작권은 The Pokémon Company)와
+[Pokémon Showdown / Smogon](https://play.pokemonshowdown.com/sprites/)(출처 표기 조건)에서 받아서 써요.
+커스텀 포켓몬 GIF는 사용자가 직접 만든 창작물이고요.
+
+자세한 출처와 고지는 **[CREDITS.md](CREDITS.md)** 를 봐줘.

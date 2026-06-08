@@ -75,6 +75,12 @@ SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
         ("모험자 이름 변경", "트레이 → 모험자 이름 변경 — 친구가 가끔 이름을 불러줘"),
         ("초기화", "트레이 → 초기화 — 처음부터 다시 시작 (모든 진행도 사라짐)"),
     ]),
+    ("📜 저작권 · 크레딧", [
+        ("비영리 팬 프로젝트", "Nintendo·Game Freak·The Pokémon Company와 제휴·후원 관계가 없어"),
+        ("포켓몬 저작권", "포켓몬·이름·스프라이트의 권리는 The Pokémon Company / Nintendo에 있어"),
+        ("스프라이트 출처", "PokéAPI(CC0) · Pokémon Showdown/Smogon(출처 표기). 자세한 건 CREDITS.md"),
+        ("커스텀 포켓몬", "9000번대 커스텀 GIF는 사용자가 직접 만든 창작물"),
+    ]),
 ]
 
 
