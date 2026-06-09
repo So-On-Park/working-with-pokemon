@@ -56,6 +56,7 @@ TILE_W = 82
 TILE_H_PLAIN = 84
 TILE_H_SPECIAL = 104
 ICON_PX = 36
+COUNT_CAP = 999   # displayed counts never exceed this
 
 
 def _load_item_pixmap(item: ItemDef, side: int) -> Optional[QPixmap]:
@@ -232,8 +233,9 @@ class InventoryPanel(QWidget):
         self._build_content()
 
     def _build_content(self) -> None:
-        # Update summary
-        totals = {kind: self.store.total_of_kind(kind.value)
+        # Update summary. Counts are shown capped at COUNT_CAP so a kind never
+        # reads as an absurd number.
+        totals = {kind: min(self.store.total_of_kind(kind.value), COUNT_CAP)
                   for kind in ItemKind}
         self._summary.setText(
             f"음식 {totals[ItemKind.FOOD]}  ·  "

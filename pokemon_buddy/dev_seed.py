@@ -18,11 +18,12 @@ from typing import List, Tuple
 
 from . import custom_pokemon
 from . import skills as skills_mod
-from .items import ITEMS
+from .items import ITEMS, ItemKind, items_of
 from .pokemon_names import get_name_cached
 from .state import Store
 
-ITEM_MAX = 999
+ITEM_MAX = 999          # per-item cap for special/skill/pokeball
+GROUP_MAX = 999         # total cap for food / toy (spread across variants)
 
 # (dex_id, level, friendship, is_rare, personality, skill_keys)
 _BAG_SPREAD: List[Tuple[int, int, int, bool, str, list]] = [
@@ -43,11 +44,25 @@ def _name(dex_id: int) -> str:
 
 def seed_test_data(store: Store) -> dict:
     """Populate `store` with broad test content. Returns a summary dict."""
-    # 1) Inventory — top every item up to ITEM_MAX.
+    # 1) Inventory.
+    #    - special / skill / pokeball: each item up to ITEM_MAX.
+    #    - food / toy: spread so the KIND total is ~GROUP_MAX (not 999 × many
+    #      variants, which would total tens of thousands).
     for it in ITEMS:
+        if it.kind in (ItemKind.FOOD, ItemKind.TOY):
+            continue
         have = store.get_item_count(it.key)
         if have < ITEM_MAX:
             store.add_item(it.key, ITEM_MAX - have)
+    for kind in (ItemKind.FOOD, ItemKind.TOY):
+        variants = items_of(kind)
+        if not variants:
+            continue
+        per = max(1, GROUP_MAX // len(variants))
+        for it in variants:
+            have = store.get_item_count(it.key)
+            if have < per:
+                store.add_item(it.key, per - have)
 
     # 2) Dex — every Gen-1 species + customs caught, plus a few rares.
     dex_filled = 0
