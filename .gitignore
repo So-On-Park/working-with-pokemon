@@ -90,6 +90,11 @@ assets/*
 # Extracted release folders
 PokemonBuddy-*-win64/
 
+# Transfer files exported/tested at the repo root — personal, not tracked.
+# (The shipped species library under pokeballs/ IS tracked.)
+/*.pokeball
+/*.scroll
+
 # Local archive — backups, recordings, old releases moved out of the way.
 # Personal / large / regenerable; never tracked.
 _archive/
