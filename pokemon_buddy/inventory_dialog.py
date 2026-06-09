@@ -248,42 +248,52 @@ class InventoryPanel(QWidget):
         inner_layout.setSpacing(6)
         inner_layout.setContentsMargins(2, 2, 2, 2)
 
-        for kind in [ItemKind.FOOD, ItemKind.TOY,
-                     ItemKind.POKEBALL, ItemKind.SPECIAL, ItemKind.SKILL]:
-            title, hint = KIND_LABELS[kind]
-            # Title + a small ⓘ (hover/click → the section hint) instead of a
-            # long inline explanation, so the header stays clean.
+        def _header(title: str, hint: str) -> QWidget:
             head_w = QWidget()
-            head_row = QHBoxLayout(head_w)
-            head_row.setContentsMargins(0, 0, 0, 0)
-            head_row.setSpacing(5)
+            row = QHBoxLayout(head_w)
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(5)
             head = QLabel(title)
-            head_font = QFont(); head_font.setBold(True); head_font.setPointSize(10)
-            head.setFont(head_font)
-            # A little left padding so the leading emoji isn't clipped.
-            head.setStyleSheet("padding-left: 2px;")
-            head_row.addWidget(head)
-            head_row.addWidget(InfoIcon(hint))
-            head_row.addStretch(1)
-            inner_layout.addWidget(head_w)
+            hf = QFont(); hf.setBold(True); hf.setPointSize(10)
+            head.setFont(hf)
+            head.setStyleSheet("padding-left: 2px;")  # don't clip leading emoji
+            row.addWidget(head)
+            row.addWidget(InfoIcon(hint))
+            row.addStretch(1)
+            return head_w
 
+        # ---- 기본 아이템: 음식 / 장난감 / 몬스터볼 in ONE row ----
+        inner_layout.addWidget(_header(
+            "🎒 기본 아이템",
+            "밥주기·놀아주기·포획에 쓰는 기본 아이템. 음식/장난감은 줄 때마다 "
+            "랜덤으로 골라 줘요."))
+        basic = QGridLayout()
+        basic.setSpacing(4)
+        basic.setContentsMargins(0, 0, 0, 4)
+        basic.addWidget(_ItemTile(_REP_ITEM[ItemKind.FOOD],
+                                  totals[ItemKind.FOOD]), 0, 0)
+        basic.addWidget(_ItemTile(_REP_ITEM[ItemKind.TOY],
+                                  totals[ItemKind.TOY]), 0, 1)
+        pballs = items_of(ItemKind.POKEBALL)
+        if pballs:
+            basic.addWidget(_ItemTile(pballs[0], totals[ItemKind.POKEBALL]), 0, 2)
+        basic.setColumnStretch(3, 1)  # keep the three tiles left-packed
+        inner_layout.addLayout(basic)
+
+        # ---- 특수 아이템 / 기술 교본 — own sections (multiple tiles) ----
+        for kind in [ItemKind.SPECIAL, ItemKind.SKILL]:
+            title, hint = KIND_LABELS[kind]
+            inner_layout.addWidget(_header(title, hint))
             grid = QGridLayout()
             grid.setSpacing(4)
             grid.setContentsMargins(0, 0, 0, 4)
-            if kind in _REP_ITEM:
-                # Food / toy → one representative tile with the kind's total.
-                rep = _REP_ITEM[kind]
-                total = self.store.total_of_kind(kind.value)
-                grid.addWidget(_ItemTile(rep, total), 0, 0)
-            else:
-                for i, item in enumerate(items_of(kind)):
-                    count = self.store.get_item_count(item.key)
-                    tile = _ItemTile(item, count)
-                    if kind in _ACTION_KINDS:
-                        tile.use_clicked.connect(self.use_item_requested)
-                    if kind == ItemKind.SKILL:
-                        tile.export_clicked.connect(self.export_skill_requested)
-                    grid.addWidget(tile, i // 4, i % 4)
+            for i, item in enumerate(items_of(kind)):
+                count = self.store.get_item_count(item.key)
+                tile = _ItemTile(item, count)
+                tile.use_clicked.connect(self.use_item_requested)
+                if kind == ItemKind.SKILL:
+                    tile.export_clicked.connect(self.export_skill_requested)
+                grid.addWidget(tile, i // 4, i % 4)
             inner_layout.addLayout(grid)
 
         inner_layout.addStretch(1)
