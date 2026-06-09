@@ -276,13 +276,26 @@ class InventoryPanel(QWidget):
             g = QGridLayout()
             g.setSpacing(4)
             g.setContentsMargins(0, 0, 0, 4)
-            # Uniform fixed-width columns + a trailing stretch column so tiles
-            # pack tidily to the left and line up across every section.
+            # 4 equal-width columns inside the fixed-width holder → identical
+            # column positions in every section (no per-section drift).
             for c in range(_GRID_COLS):
-                g.setColumnStretch(c, 0)
-                g.setColumnMinimumWidth(c, TILE_W)
-            g.setColumnStretch(_GRID_COLS, 1)
+                g.setColumnStretch(c, 1)
             return g
+
+        grid_w = _GRID_COLS * TILE_W + (_GRID_COLS - 1) * 4
+
+        def _add_centered(grid: QGridLayout) -> None:
+            # Fixed-width holder so every section lines up identically and the
+            # block sits centered with equal padding on both sides.
+            holder = QWidget()
+            holder.setFixedWidth(grid_w)
+            holder.setLayout(grid)
+            row = QHBoxLayout()
+            row.setContentsMargins(0, 0, 0, 0)
+            row.addStretch(1)
+            row.addWidget(holder)
+            row.addStretch(1)
+            inner_layout.addLayout(row)
 
         basic = _new_grid()
         basic.addWidget(_ItemTile(_REP_ITEM[ItemKind.FOOD],
@@ -293,7 +306,7 @@ class InventoryPanel(QWidget):
         if pballs:
             basic.addWidget(_ItemTile(pballs[0],
                                       totals[ItemKind.POKEBALL]), 0, 2, _AL)
-        inner_layout.addLayout(basic)
+        _add_centered(basic)
 
         # ---- 특수 아이템 / 기술 교본 — own sections (multiple tiles) ----
         for kind in [ItemKind.SPECIAL, ItemKind.SKILL]:
@@ -307,7 +320,7 @@ class InventoryPanel(QWidget):
                 if kind == ItemKind.SKILL:
                     tile.export_clicked.connect(self.export_skill_requested)
                 grid.addWidget(tile, i // _GRID_COLS, i % _GRID_COLS, _AL)
-            inner_layout.addLayout(grid)
+            _add_centered(grid)
 
         inner_layout.addStretch(1)
         self._scroll.setWidget(inner)
