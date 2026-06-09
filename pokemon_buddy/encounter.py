@@ -68,6 +68,14 @@ class EncounterManager(QObject):
     def force_spawn(self) -> None:
         self._spawn(ignore_cooldown=True)
 
+    def request_auto_catch(self) -> None:
+        """Trigger a catch attempt programmatically (used by the 명포수 skill).
+        Same path as a user click; no-op if nothing is active or a throw is
+        already in flight."""
+        if self._active is None or self._ball is not None:
+            return
+        self._on_pokemon_clicked()
+
     # ---- polling ----
     def _tick(self) -> None:
         # Don't spawn wild Pokemon while the workstation is locked — the

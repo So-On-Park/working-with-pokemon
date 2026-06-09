@@ -41,11 +41,23 @@ KIND_LABELS = {
 # Item kinds that get an action button on their tile (사용/전수).
 _ACTION_KINDS = {ItemKind.SPECIAL, ItemKind.SKILL}
 
+# Food / toy are shown as a SINGLE representative tile holding the kind's
+# total count (밥주기/놀아주기 pick a random one each time, so individual
+# variants don't need their own tiles).
+_REP_ITEM = {
+    ItemKind.FOOD: ItemDef("food", ItemKind.FOOD, "🍎", "음식",
+                           description="밥주기에 쓰는 음식. 줄 때마다 랜덤으로 골라 줘요."),
+    ItemKind.TOY:  ItemDef("toy", ItemKind.TOY, "🎾", "장난감",
+                           description="놀아주기에 쓰는 장난감. 놀 때마다 랜덤으로 골라 줘요."),
+}
+
 # Heights vary by section so the SPECIAL tiles can fit a "사용" button.
 TILE_W = 82
-TILE_H_PLAIN = 76
-TILE_H_SPECIAL = 100
+TILE_H_PLAIN = 84
+TILE_H_SPECIAL = 104
 ICON_PX = 36
+COUNT_CAP = 999   # displayed counts never exceed this
+_GRID_COLS = 4    # tiles per row (all sections share this for alignment)
 
 
 def _load_item_pixmap(item: ItemDef, side: int) -> Optional[QPixmap]:
@@ -79,7 +91,8 @@ def _dim_pixmap(pm: QPixmap) -> QPixmap:
 
 
 class _ItemTile(QFrame):
-    use_clicked = Signal(str)  # item_key
+    use_clicked = Signal(str)     # item_key — 사용/전수
+    export_clicked = Signal(str)  # item_key — 보내기 (skill scrolls only)
 
     def __init__(self, item: ItemDef, count: int,
                  parent: QWidget | None = None) -> None:
@@ -109,13 +122,15 @@ class _ItemTile(QFrame):
         # Icon — pokeball/sprite if available, else emoji glyph fallback.
         icon = QLabel()
         icon.setAlignment(Qt.AlignCenter)
-        icon.setFixedHeight(ICON_PX + 4)
+        # A touch more room + a slightly smaller emoji so the glyph isn't
+        # clipped on any edge.
+        icon.setFixedHeight(ICON_PX + 12)
         pm = _load_item_pixmap(item, ICON_PX)
         if pm is not None:
             icon.setPixmap(_dim_pixmap(pm) if not owned else pm)
         else:
             icon.setText(item.emoji)
-            f = QFont(); f.setPointSize(18)
+            f = QFont(); f.setPointSize(16)
             icon.setFont(f)
             if not owned:
                 icon.setStyleSheet("color: #aaa;")
@@ -137,31 +152,55 @@ class _ItemTile(QFrame):
         )
         col.addWidget(count_row)
 
-        # Action button — SPECIAL (사용) and SKILL (전수) tiles.
+        # Action button — SPECIAL (사용), SKILL (전수 + 보내기).
         if item.kind in _ACTION_KINDS:
-            btn = QPushButton("전수" if item.kind == ItemKind.SKILL else "사용")
-            btn.setEnabled(owned)
-            btn.setFixedHeight(18)
-            btn.setStyleSheet(
+            use_style = (
                 "QPushButton {"
                 "  background: #6f4cd6; color: white;"
                 "  border: none; border-radius: 4px;"
-                "  font-size: 8pt; padding: 0px;"
+                "  font-size: 7pt; padding: 0px;"
                 "}"
                 "QPushButton:hover { background: #5d3fc0; }"
                 "QPushButton:disabled { background: #ccc; color: #888; }"
             )
-            btn.clicked.connect(lambda: self.use_clicked.emit(self.item.key))
-            col.addWidget(btn)
+            send_style = (
+                "QPushButton {"
+                "  background: #e8553e; color: white;"
+                "  border: none; border-radius: 4px;"
+                "  font-size: 7pt; padding: 0px;"
+                "}"
+                "QPushButton:hover { background: #cf4631; }"
+                "QPushButton:disabled { background: #ccc; color: #888; }"
+            )
+            use_btn = QPushButton("전수" if item.kind == ItemKind.SKILL else "사용")
+            use_btn.setEnabled(owned)
+            use_btn.setFixedHeight(18)
+            use_btn.setStyleSheet(use_style)
+            use_btn.clicked.connect(lambda: self.use_clicked.emit(self.item.key))
+            if item.kind == ItemKind.SKILL:
+                # Skill scrolls can also be sent to a file.
+                send_btn = QPushButton("보내기")
+                send_btn.setEnabled(owned)
+                send_btn.setFixedHeight(18)
+                send_btn.setStyleSheet(send_style)
+                send_btn.clicked.connect(
+                    lambda: self.export_clicked.emit(self.item.key))
+                brow = QHBoxLayout()
+                brow.setContentsMargins(0, 0, 0, 0)
+                brow.setSpacing(2)
+                brow.addWidget(use_btn)
+                brow.addWidget(send_btn)
+                col.addLayout(brow)
+            else:
+                col.addWidget(use_btn)
 
-        # Per-item explanation: hover anywhere on the tile, or click the
-        # corner ⓘ, to read what the item does — keeps the tile uncluttered.
+        # Per-item explanation simply on hover — set the tooltip on the tile
+        # and its labels (icon / name / count) so pointing at the item shows
+        # what it does. No extra icon needed.
         if item.description:
             self.setToolTip(item.description)
-            info = InfoIcon(item.description, self)
-            info.resize(16, 16)
-            info.move(TILE_W - 17, 2)
-            info.raise_()
+            for lbl in self.findChildren(QLabel):
+                lbl.setToolTip(item.description)
 
 
 class InventoryPanel(QWidget):
@@ -170,6 +209,7 @@ class InventoryPanel(QWidget):
     사용 button. MainPanel forwards this up to the app."""
 
     use_item_requested = Signal(str)
+    export_skill_requested = Signal(str)  # skill item_key → 보내기
 
     def __init__(self, store: Store, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -194,8 +234,9 @@ class InventoryPanel(QWidget):
         self._build_content()
 
     def _build_content(self) -> None:
-        # Update summary
-        totals = {kind: self.store.total_of_kind(kind.value)
+        # Update summary. Counts are shown capped at COUNT_CAP so a kind never
+        # reads as an absurd number.
+        totals = {kind: min(self.store.total_of_kind(kind.value), COUNT_CAP)
                   for kind in ItemKind}
         self._summary.setText(
             f"음식 {totals[ItemKind.FOOD]}  ·  "
@@ -210,33 +251,76 @@ class InventoryPanel(QWidget):
         inner_layout.setSpacing(6)
         inner_layout.setContentsMargins(2, 2, 2, 2)
 
-        for kind in [ItemKind.FOOD, ItemKind.TOY,
-                     ItemKind.POKEBALL, ItemKind.SPECIAL, ItemKind.SKILL]:
-            title, hint = KIND_LABELS[kind]
-            # Title + a small ⓘ (hover/click → the section hint) instead of a
-            # long inline explanation, so the header stays clean.
+        def _header(title: str, hint: str) -> QWidget:
             head_w = QWidget()
-            head_row = QHBoxLayout(head_w)
-            head_row.setContentsMargins(0, 0, 0, 0)
-            head_row.setSpacing(5)
+            row = QHBoxLayout(head_w)
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(5)
             head = QLabel(title)
-            head_font = QFont(); head_font.setBold(True); head_font.setPointSize(10)
-            head.setFont(head_font)
-            head_row.addWidget(head)
-            head_row.addWidget(InfoIcon(hint))
-            head_row.addStretch(1)
-            inner_layout.addWidget(head_w)
+            hf = QFont(); hf.setBold(True); hf.setPointSize(10)
+            head.setFont(hf)
+            head.setStyleSheet("padding-left: 2px;")  # don't clip leading emoji
+            row.addWidget(head)
+            row.addWidget(InfoIcon(hint))
+            row.addStretch(1)
+            return head_w
 
-            grid = QGridLayout()
-            grid.setSpacing(4)
-            grid.setContentsMargins(0, 0, 0, 4)
+        # ---- 기본 아이템: 음식 / 장난감 / 몬스터볼 in ONE row ----
+        inner_layout.addWidget(_header(
+            "🎒 기본 아이템",
+            "밥주기·놀아주기·포획에 쓰는 기본 아이템. 음식/장난감은 줄 때마다 "
+            "랜덤으로 골라 줘요."))
+        _AL = Qt.AlignLeft | Qt.AlignTop
+
+        def _new_grid() -> QGridLayout:
+            g = QGridLayout()
+            g.setSpacing(4)
+            g.setContentsMargins(0, 0, 0, 4)
+            # 4 equal-width columns inside the fixed-width holder → identical
+            # column positions in every section (no per-section drift).
+            for c in range(_GRID_COLS):
+                g.setColumnStretch(c, 1)
+            return g
+
+        grid_w = _GRID_COLS * TILE_W + (_GRID_COLS - 1) * 4
+
+        def _add_centered(grid: QGridLayout) -> None:
+            # Fixed-width holder so every section lines up identically and the
+            # block sits centered with equal padding on both sides.
+            holder = QWidget()
+            holder.setFixedWidth(grid_w)
+            holder.setLayout(grid)
+            row = QHBoxLayout()
+            row.setContentsMargins(0, 0, 0, 0)
+            row.addStretch(1)
+            row.addWidget(holder)
+            row.addStretch(1)
+            inner_layout.addLayout(row)
+
+        basic = _new_grid()
+        basic.addWidget(_ItemTile(_REP_ITEM[ItemKind.FOOD],
+                                  totals[ItemKind.FOOD]), 0, 0, _AL)
+        basic.addWidget(_ItemTile(_REP_ITEM[ItemKind.TOY],
+                                  totals[ItemKind.TOY]), 0, 1, _AL)
+        pballs = items_of(ItemKind.POKEBALL)
+        if pballs:
+            basic.addWidget(_ItemTile(pballs[0],
+                                      totals[ItemKind.POKEBALL]), 0, 2, _AL)
+        _add_centered(basic)
+
+        # ---- 특수 아이템 / 기술 교본 — own sections (multiple tiles) ----
+        for kind in [ItemKind.SPECIAL, ItemKind.SKILL]:
+            title, hint = KIND_LABELS[kind]
+            inner_layout.addWidget(_header(title, hint))
+            grid = _new_grid()
             for i, item in enumerate(items_of(kind)):
                 count = self.store.get_item_count(item.key)
                 tile = _ItemTile(item, count)
-                if kind in _ACTION_KINDS:
-                    tile.use_clicked.connect(self.use_item_requested)
-                grid.addWidget(tile, i // 4, i % 4)
-            inner_layout.addLayout(grid)
+                tile.use_clicked.connect(self.use_item_requested)
+                if kind == ItemKind.SKILL:
+                    tile.export_clicked.connect(self.export_skill_requested)
+                grid.addWidget(tile, i // _GRID_COLS, i % _GRID_COLS, _AL)
+            _add_centered(grid)
 
         inner_layout.addStretch(1)
         self._scroll.setWidget(inner)

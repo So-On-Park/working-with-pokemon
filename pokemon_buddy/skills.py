@@ -21,6 +21,7 @@ from typing import Dict, Optional
 
 # Skill keys (stored verbatim in bag.skills).
 SKILL_COLLECTOR = "collector"
+SKILL_CATCHER = "catcher"
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,16 @@ SKILLS: Dict[str, SkillDef] = {
         item_key="skill.collector",
         description=(
             "화면에 아이템이 떨어지면 잠시 뒤 끌어당겨 자동으로 주워와."
+        ),
+    ),
+    SKILL_CATCHER: SkillDef(
+        key=SKILL_CATCHER,
+        name="명포수",
+        emoji="🎯",
+        item_key="skill.catcher",
+        description=(
+            "야생 포켓몬이 나타나면 자동으로 몬스터볼을 던져 잡아줘. "
+            "레벨 100이 되면 깨우쳐."
         ),
     ),
 }

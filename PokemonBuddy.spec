@@ -18,6 +18,8 @@ a = Analysis(
     hiddenimports=[
         # PySide6 plugins PyInstaller occasionally misses on first scan
         'PySide6.QtSvg',
+        # Single-instance IPC + file-association hand-off (pokemon_transfer)
+        'PySide6.QtNetwork',
     ],
     hookspath=[],
     hooksconfig={},

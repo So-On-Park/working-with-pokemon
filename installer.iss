@@ -24,7 +24,7 @@
 ; want to move a save between machines, use the in-app 백업하기 / 백업 불러오기.
 
 #define MyAppName "Pokemon Buddy"
-#define MyAppVersion "1.2.1"
+#define MyAppVersion "1.3.0"
 #define MyAppPublisher "So-On-Park"
 #define MyAppExeName "PokemonBuddy.exe"
 
@@ -51,6 +51,8 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
+; Tell the shell we register file types (.pokeball / .scroll) so icons refresh.
+ChangesAssociations=yes
 ; We handle a running instance ourselves in [Code] (notify + force close),
 ; so disable Inno's own Restart Manager prompt to avoid a double dialog.
 CloseApplications=no
@@ -74,6 +76,8 @@ Source: "dist\PokemonBuddy.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; fallback; it never writes here. "skipifsourcedoesntexist" keeps the build
 ; working even if assets\ is trimmed before packaging.
 Source: "assets\*"; DestDir: "{app}\assets"; Flags: recursesubdirs ignoreversion skipifsourcedoesntexist
+; Shipped library of species-only .pokeball files (import → fresh catch).
+Source: "pokeballs\*"; DestDir: "{app}\pokeballs"; Flags: recursesubdirs ignoreversion skipifsourcedoesntexist
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -84,6 +88,19 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 ; Optional auto-start (per-user Run key) — only added when the user ticks the
 ; "startup" task; removed cleanly on uninstall.
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "PokemonBuddy"; ValueData: """{app}\{#MyAppExeName}"""; Flags: uninsdeletevalue; Tasks: startup
+
+; ---- File associations (per-user, no admin) ----
+; .pokeball — a sent/shared Pokemon. Pokéball icon, double-click → import.
+Root: HKCU; Subkey: "Software\Classes\.pokeball"; ValueType: string; ValueData: "PokemonBuddy.pokeball"; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\Classes\PokemonBuddy.pokeball"; ValueType: string; ValueData: "Pokemon Buddy 포켓몬"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\PokemonBuddy.pokeball\DefaultIcon"; ValueType: string; ValueData: "{app}\assets\pokeball.ico"
+Root: HKCU; Subkey: "Software\Classes\PokemonBuddy.pokeball\shell\open\command"; ValueType: string; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
+
+; .scroll — a skill teaching-scroll. Parchment icon, double-click → import.
+Root: HKCU; Subkey: "Software\Classes\.scroll"; ValueType: string; ValueData: "PokemonBuddy.scroll"; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\Classes\PokemonBuddy.scroll"; ValueType: string; ValueData: "Pokemon Buddy 스킬 교본"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\PokemonBuddy.scroll\DefaultIcon"; ValueType: string; ValueData: "{app}\assets\scroll.ico"
+Root: HKCU; Subkey: "Software\Classes\PokemonBuddy.scroll\shell\open\command"; ValueType: string; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
 
 [Run]
 ; Offer to launch right after install.

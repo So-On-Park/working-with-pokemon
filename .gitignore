@@ -76,11 +76,24 @@ assets/*
 !assets/custom_pokemon.json
 !assets/9[0-9][0-9][0-9]_*.gif
 
-# App / tray icon (메타몽 #0132) — a build input, tracked despite assets/*.
+# App / tray icon (메타몽 #0132) + file-type icons — build inputs, tracked.
 !assets/icon.ico
+!assets/pokeball.ico
+!assets/scroll.ico
+
+# Starter sprites shown in README — tracked so they render on GitHub.
+!assets/0001_showdown.gif
+!assets/0004_showdown.gif
+!assets/0007_showdown.gif
+!assets/0025_showdown.gif
 
 # Extracted release folders
 PokemonBuddy-*-win64/
+
+# Transfer files exported/tested at the repo root — personal, not tracked.
+# (The shipped species library under pokeballs/ IS tracked.)
+/*.pokeball
+/*.scroll
 
 # Local archive — backups, recordings, old releases moved out of the way.
 # Personal / large / regenerable; never tracked.

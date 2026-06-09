@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS bag (
     personality TEXT NOT NULL DEFAULT 'playful',
     last_interaction_at REAL NOT NULL DEFAULT 0,
     caught_at REAL NOT NULL,
-    skills TEXT NOT NULL DEFAULT '[]'
+    skills TEXT NOT NULL DEFAULT '[]',
+    gender TEXT
 );
 
 CREATE TABLE IF NOT EXISTS inventory (
@@ -183,6 +184,7 @@ class Buddy:
     last_interaction_at: float
     caught_at: float
     skills: str = "[]"           # JSON list of learned skill keys (e.g. ["collector"])
+    gender: Optional[str] = None  # 'm'/'f'/'n' override; None → derive from bag_id
 
     @property
     def exp_to_next(self) -> int:
@@ -258,6 +260,7 @@ class Store:
         self._migrate_reset_legacy_default_friendship()
         self._migrate_add_alarm_label_message()
         self._migrate_add_bag_skills()
+        self._migrate_add_bag_gender()
         self._ensure_active_buddy()
         self._ensure_default_reminders()
         self._ensure_starter_items()
@@ -452,6 +455,16 @@ class Store:
                 "ALTER TABLE bag ADD COLUMN skills TEXT NOT NULL DEFAULT '[]'"
             )
         self.set_meta("bag_skills_migrated", "1")
+        self.conn.commit()
+
+    def _migrate_add_bag_gender(self) -> None:
+        """bag: add nullable `gender` so a sent/received individual can carry
+        its exact gender (normal catches leave it NULL → derived as before)."""
+        if self.get_meta("bag_gender_migrated") == "1":
+            return
+        if "gender" not in self._table_columns("bag"):
+            self.conn.execute("ALTER TABLE bag ADD COLUMN gender TEXT")
+        self.set_meta("bag_gender_migrated", "1")
         self.conn.commit()
 
     def _migrate_reset_legacy_default_friendship(self) -> None:
@@ -696,6 +709,7 @@ class Store:
             last_interaction_at=row["last_interaction_at"],
             caught_at=row["caught_at"],
             skills=(row["skills"] if "skills" in row.keys() else "[]") or "[]",
+            gender=(row["gender"] if "gender" in row.keys() else None),
         )
 
     def load_active_buddy(self) -> Buddy:
@@ -868,6 +882,37 @@ class Store:
         )
         self.conn.commit()
         return self.get_bag_entry(cur.lastrowid)  # type: ignore[return-value]
+
+    def import_bag_entry(self, *, dex_id: int, is_rare: bool = False,
+                         nickname: Optional[str] = None, level: int = 1,
+                         exp: int = 0, friendship: int = 0,
+                         friendship_xp: int = 0,
+                         caught_with: str = "pokeball.basic",
+                         personality: str = "playful",
+                         nickname_history: str = "[]", skills: str = "[]",
+                         gender: Optional[str] = None,
+                         caught_at: Optional[float] = None) -> Buddy:
+        """Insert a fully-specified individual (used when importing a sent
+        `.pokeball` full snapshot). Unlike add_to_bag, every stat is taken
+        verbatim so the received Pokemon arrives exactly as it left."""
+        now = time.time()
+        cur = self.conn.execute(
+            "INSERT INTO bag(dex_id, is_rare, nickname, level, exp, "
+            "friendship, friendship_xp, caught_with, personality, "
+            "nickname_history, last_interaction_at, caught_at, skills, gender) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (dex_id, int(is_rare), nickname, int(level), int(exp),
+             int(friendship), int(friendship_xp), caught_with, personality,
+             nickname_history or "[]", now,
+             float(caught_at) if caught_at else now,
+             skills or "[]", gender),
+        )
+        self.conn.commit()
+        return self.get_bag_entry(cur.lastrowid)  # type: ignore[return-value]
+
+    def bag_count(self) -> int:
+        row = self.conn.execute("SELECT COUNT(*) AS n FROM bag").fetchone()
+        return int(row["n"]) if row else 0
 
     def remove_from_bag(self, bag_id: int) -> None:
         # Drop from party first so the party list doesn't reference a
@@ -1311,6 +1356,19 @@ class Store:
             (prefix + "%",),
         ).fetchone()
         return row["item_key"] if row else None
+
+    def random_available_of_kind(self, kind: str) -> Optional[str]:
+        """A RANDOM owned item_key of the given kind (count > 0), or None.
+        Feed/play use this so the buddy eats a different food / plays with a
+        different toy each time."""
+        import random as _r
+        prefix = f"{kind}."
+        rows = self.conn.execute(
+            "SELECT item_key FROM inventory WHERE item_key LIKE ? AND count > 0",
+            (prefix + "%",),
+        ).fetchall()
+        keys = [r["item_key"] for r in rows]
+        return _r.choice(keys) if keys else None
 
     # ---------- reset ----------
     def reset_all_data(self) -> None:

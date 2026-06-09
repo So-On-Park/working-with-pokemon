@@ -52,6 +52,25 @@ ITEMS: List[ItemDef] = [
             description="밥주기에 쓰는 음식. 주면 친밀도가 조금 올라가."),
     ItemDef("food.cookie",    ItemKind.FOOD,     "🍪", "과자",
             description="밥주기에 쓰는 음식. 주면 친밀도가 조금 올라가."),
+    # more foods — meals, veggies, desserts, snacks
+    ItemDef("food.pizza",     ItemKind.FOOD,     "🍕", "피자"),
+    ItemDef("food.burger",    ItemKind.FOOD,     "🍔", "햄버거"),
+    ItemDef("food.fries",     ItemKind.FOOD,     "🍟", "감자튀김"),
+    ItemDef("food.hotdog",    ItemKind.FOOD,     "🌭", "핫도그"),
+    ItemDef("food.egg",       ItemKind.FOOD,     "🍳", "계란프라이"),
+    ItemDef("food.pancake",   ItemKind.FOOD,     "🥞", "팬케이크"),
+    ItemDef("food.salad",     ItemKind.FOOD,     "🥗", "샐러드"),
+    ItemDef("food.kebab",     ItemKind.FOOD,     "🥙", "케밥"),
+    ItemDef("food.steak",     ItemKind.FOOD,     "🥩", "스테이크"),
+    ItemDef("food.ramen",     ItemKind.FOOD,     "🍜", "라멘"),
+    ItemDef("food.sushi",     ItemKind.FOOD,     "🍣", "초밥"),
+    ItemDef("food.fondue",    ItemKind.FOOD,     "🫕", "퐁뒤"),
+    ItemDef("food.dango",     ItemKind.FOOD,     "🍡", "경단"),
+    ItemDef("food.grapes",    ItemKind.FOOD,     "🍇", "포도"),
+    ItemDef("food.chestnut",  ItemKind.FOOD,     "🌰", "군밤"),
+    ItemDef("food.pepper",    ItemKind.FOOD,     "🫑", "피망"),
+    ItemDef("food.olive",     ItemKind.FOOD,     "🫒", "올리브"),
+    ItemDef("food.chili",     ItemKind.FOOD,     "🌶️", "고추"),
 
     # toys
     ItemDef("toy.ball",       ItemKind.TOY,      "🎾", "공",
@@ -60,6 +79,29 @@ ITEMS: List[ItemDef] = [
             description="놀아주기에 쓰는 장난감. EXP와 친밀도가 올라가."),
     ItemDef("toy.bell",       ItemKind.TOY,      "🔔", "방울",
             description="놀아주기에 쓰는 장난감. EXP와 친밀도가 올라가."),
+    # more toys — balls, instruments, craft, etc.
+    ItemDef("toy.firecracker", ItemKind.TOY,     "🧨", "폭죽"),
+    ItemDef("toy.palette",    ItemKind.TOY,      "🎨", "팔레트"),
+    ItemDef("toy.baseball",   ItemKind.TOY,      "⚾", "야구공"),
+    ItemDef("toy.softball",   ItemKind.TOY,      "🥎", "소프트볼"),
+    ItemDef("toy.basketball", ItemKind.TOY,      "🏀", "농구공"),
+    ItemDef("toy.volleyball", ItemKind.TOY,      "🏐", "배구공"),
+    ItemDef("toy.football",   ItemKind.TOY,      "🏈", "미식축구공"),
+    ItemDef("toy.soccer",     ItemKind.TOY,      "⚽", "축구공"),
+    ItemDef("toy.lipstick",   ItemKind.TOY,      "💄", "립스틱"),
+    ItemDef("toy.pingpong",   ItemKind.TOY,      "🏓", "탁구"),
+    ItemDef("toy.dice",       ItemKind.TOY,      "🎲", "주사위"),
+    ItemDef("toy.teddy",      ItemKind.TOY,      "🧸", "곰인형"),
+    ItemDef("toy.wand",       ItemKind.TOY,      "🪄", "요술봉"),
+    ItemDef("toy.cards",      ItemKind.TOY,      "🎴", "화투"),
+    ItemDef("toy.yoyo",       ItemKind.TOY,      "🪀", "요요"),
+    ItemDef("toy.horn",       ItemKind.TOY,      "📯", "나팔"),
+    ItemDef("toy.flute",      ItemKind.TOY,      "🪈", "피리"),
+    ItemDef("toy.maracas",    ItemKind.TOY,      "🪇", "마라카스"),
+    ItemDef("toy.violin",     ItemKind.TOY,      "🎻", "바이올린"),
+    ItemDef("toy.piano",      ItemKind.TOY,      "🎹", "피아노"),
+    ItemDef("toy.crayon",     ItemKind.TOY,      "🖍️", "크레용"),
+    ItemDef("toy.bubble",     ItemKind.TOY,      "🫧", "비눗방울"),
 
     # pokeballs
     ItemDef("pokeball.basic", ItemKind.POKEBALL, "🔴", "몬스터볼",
@@ -91,6 +133,9 @@ ITEMS: List[ItemDef] = [
     ItemDef("skill.collector",       ItemKind.SKILL,   "📜", "수집광 교본",
             description="파티원에게 전수하는 기술 교본. 배운 포켓몬은 화면에 "
                         "떨어진 아이템을 끌어당겨 자동으로 주워와."),
+    ItemDef("skill.catcher",         ItemKind.SKILL,   "📜", "명포수 교본",
+            description="배운 포켓몬은 야생 포켓몬이 나타나면 자동으로 "
+                        "몬스터볼을 던져 잡아줘. (레벨 100이면 스스로 깨우침)"),
 ]
 
 ITEMS_BY_KEY: Dict[str, ItemDef] = {it.key: it for it in ITEMS}

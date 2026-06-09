@@ -765,6 +765,116 @@ def pick(bank: Dict[Tier, List[str]], friendship: int) -> str:
     return random.choice(bank[tier_for(friendship)])
 
 
+# A line the buddy says right before being sent away (보내기 confirm).
+FAREWELL: List[str] = [
+    "그동안 즐거웠어… 새 친구한테도 잘 보일게!",
+    "엥? 나… 어디 가는 거야?",
+    "새로운 모험이라니, 살짝 설레는걸?",
+    "잘 지내! 가끔 내 생각도 해줘.",
+    "고마웠어. 너랑 보낸 시간 잊지 않을게.",
+    "정든 자리를 떠나려니 조금 아쉽다…",
+    "또 만날 수 있겠지? 그때까지 안녕!",
+    "새 친구도 나만큼 아껴줄까…?",
+]
+
+
+def pick_farewell() -> str:
+    """A random goodbye line for the 보내기 (send) confirmation."""
+    return random.choice(FAREWELL)
+
+
+# A 수집광 buddy's line when it reels in a dropped item.
+COLLECTOR_LINES: List[str] = [
+    "내가 주워올게! 🧲",
+    "이건 내 거~ 슈웅!",
+    "주섬주섬… 또 하나 겟!",
+    "수집은 내 취미라구!",
+    "놓칠 줄 알고? 휙!",
+]
+
+
+def pick_collector() -> str:
+    return random.choice(COLLECTOR_LINES)
+
+
+# A 명포수(catcher) buddy's line when it auto-throws a ball at a wild.
+CATCHER_LINES: List[str] = [
+    "저 녀석, 내가 잡는다! 🎯",
+    "몬스터볼, 가랏!",
+    "도망 못 가게 해줄게!",
+    "이건 내 사냥감이야!",
+]
+
+
+def pick_catcher() -> str:
+    return random.choice(CATCHER_LINES)
+
+
+# Per-food / per-toy flavor lines — the buddy reacts differently to each.
+FOOD_LINES: Dict[str, List[str]] = {
+    "food.apple":   ["아삭아삭 사과 맛있다!", "사과는 언제나 옳아 🍎", "한 입 더 줄래?"],
+    "food.berry":   ["달콤한 딸기 최고!", "딸기 더 없어? 🍓", "새콤달콤 좋아!"],
+    "food.cake":    ["케이크라니, 오늘 무슨 날이야? 🍰", "달다 달아~", "특별한 기분이야!"],
+    "food.cookie":  ["바삭한 과자 좋아! 🍪", "과자 부스러기까지 싹싹", "이거 중독성 있어!"],
+    "food.pizza":   ["피자다! 한 조각 더! 🍕", "치즈 쭉~ 늘어나!"],
+    "food.burger":  ["햄버거 크게 한 입! 🍔", "패티 육즙 최고!"],
+    "food.fries":   ["감자튀김 바삭바삭! 🍟", "케첩 찍어 먹을래!"],
+    "food.hotdog":  ["핫도그 좋아! 🌭", "한 입에 쏙!"],
+    "food.egg":     ["계란프라이 노른자 톡! 🍳", "고소해~"],
+    "food.pancake": ["팬케이크 폭신폭신! 🥞", "시럽 듬뿍!"],
+    "food.salad":   ["샐러드라니 건강해지는 기분 🥗", "아삭아삭 채소!"],
+    "food.kebab":   ["케밥 푸짐하다! 🥙", "이것저것 다 들었네!"],
+    "food.steak":   ["스테이크라니 호강이야 🥩", "육즙이 팡!"],
+    "food.ramen":   ["라멘 후루룩! 🍜", "국물까지 싹!"],
+    "food.sushi":   ["초밥 신선해! 🍣", "한 점 더 줄래?"],
+    "food.fondue":  ["퐁뒤 찍어 먹는 재미! 🫕", "치즈 폭포다!"],
+    "food.dango":   ["경단 쫄깃쫄깃! 🍡", "달달해~"],
+    "food.grapes":  ["포도 톡톡 터져! 🍇", "새콤달콤!"],
+    "food.chestnut":["군밤 고소해! 🌰", "따끈따끈~"],
+    "food.pepper":  ["피망도 잘 먹지! 🫑", "아삭한 맛!"],
+    "food.olive":   ["올리브 짭짤해 🫒", "어른의 맛인가?"],
+    "food.chili":   ["고추 맵지만 좋아! 🌶️", "앗 매워! 그래도 또!"],
+}
+_FOOD_DEFAULT = ["냠냠, 맛있어!", "잘 먹었어!", "배불러~ 고마워!"]
+
+TOY_LINES: Dict[str, List[str]] = {
+    "toy.ball":        ["공놀이 가자! 🎾", "데굴데굴 신난다", "또 던져줘!"],
+    "toy.kite":        ["연 날리자! 🪁", "바람 타고 훨훨~", "하늘 높이 올라간다!"],
+    "toy.bell":        ["딸랑딸랑 방울 소리 좋아 🔔", "이 소리 좋은데?"],
+    "toy.firecracker": ["펑! 폭죽 신난다 🧨", "반짝반짝 터진다!"],
+    "toy.palette":     ["그림 그리자! 🎨", "알록달록 예뻐!"],
+    "toy.baseball":    ["야구공 던져줘! ⚾", "홈런 칠 거야!"],
+    "toy.softball":    ["소프트볼 받기 연습! 🥎", "데구르르~"],
+    "toy.basketball":  ["농구공 슛! 🏀", "드리블 드리블~"],
+    "toy.volleyball":  ["배구공 토스! 🏐", "스파이크!"],
+    "toy.football":    ["럭비공 잡았다! 🏈", "터치다운!"],
+    "toy.soccer":      ["축구공 차자! ⚽", "골인!"],
+    "toy.lipstick":    ["립스틱으로 꾸며볼까? 💄", "예뻐졌지?"],
+    "toy.pingpong":    ["탁구 핑퐁핑퐁! 🏓", "랠리 가자!"],
+    "toy.dice":        ["주사위 굴려! 🎲", "6 나와라!"],
+    "toy.teddy":       ["곰인형 폭신해 🧸", "꼬옥 안아줘!"],
+    "toy.wand":        ["요술봉 휘둘러! 🪄", "뿅! 마법이다!"],
+    "toy.cards":       ["화투 한 판? 🎴", "패가 좋은데?"],
+    "toy.yoyo":        ["요요 위아래로! 🪀", "묘기 부려볼까?"],
+    "toy.horn":        ["빠밤~ 나팔 분다 📯", "소리 우렁차!"],
+    "toy.flute":       ["피리 삐리리~ 🪈", "노래 불러볼까?"],
+    "toy.maracas":     ["마라카스 흔들흔들! 🪇", "차차차!"],
+    "toy.violin":      ["바이올린 켜볼까? 🎻", "선율이 아름다워~"],
+    "toy.piano":       ["피아노 도레미! 🎹", "연주 들려줄게!"],
+    "toy.crayon":      ["크레용으로 쓱쓱! 🖍️", "낙서 재밌어!"],
+    "toy.bubble":      ["비눗방울 둥둥~ 🫧", "팡팡 터뜨리자!"],
+}
+_TOY_DEFAULT = ["신난다! 같이 놀자!", "재밌어!", "더 놀고 싶어!"]
+
+
+def pick_food_line(item_key: str) -> str:
+    return random.choice(FOOD_LINES.get(item_key, _FOOD_DEFAULT))
+
+
+def pick_toy_line(item_key: str) -> str:
+    return random.choice(TOY_LINES.get(item_key, _TOY_DEFAULT))
+
+
 # Probability of drawing from the hidden bond-max pool when the buddy is
 # at friendship 100. Lower than 1.0 so regular AFFECTIONATE chatter still
 # appears occasionally — keeps variety.

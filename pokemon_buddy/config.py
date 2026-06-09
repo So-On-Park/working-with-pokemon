@@ -262,7 +262,8 @@ ITEM_DROP_PROBABILITY = 0.45         # chance per poll
 ITEM_DROP_COOLDOWN_S = 75            # min seconds between drops
 ITEM_DROP_AUTO_FADE_MS = 90_000      # disappear after 90s uncollected
 ITEM_DROP_MAX_ACTIVE = 3             # how many can sit on screen at once
-ITEM_DROP_SIZE_PX = 44               # window side (emoji icon size)
+ITEM_DROP_SIZE_PX = 44               # window side (special/skill drops)
+ITEM_DROP_SIZE_SMALL_PX = 32         # smaller side for food / toy / pokeball
 
 # Skill scrolls — a rare "두루마리" (📜) drop. Rolled independently from the
 # normal item drop so it stays a genuine surprise. Collecting one banks a
