@@ -491,6 +491,10 @@ class BuddyApp:
             drop_act.triggered.connect(self.on_force_item_drop)
             menu.addAction(drop_act)
 
+            seed_act = QAction("🧪 테스트 데이터 채우기", menu)
+            seed_act.triggered.connect(self.on_seed_test_data)
+            menu.addAction(seed_act)
+
         menu.addSeparator()
 
         help_act = QAction("기능 설명…", menu)
@@ -1328,6 +1332,32 @@ class BuddyApp:
 
     def on_force_item_drop(self) -> None:
         self.item_drops.force_spawn()
+
+    def on_seed_test_data(self) -> None:
+        """Dev-mode: fill the save with broad test content (maxed inventory,
+        full dex, a spread of bag pokemon w/ skills)."""
+        if QMessageBox.question(
+                None, "테스트 데이터 채우기",
+                "전체 기능 테스트용 데이터를 채울까?\n"
+                "(아이템 최대치, 도감 전체, 다양한 레벨·친밀도 포켓몬 추가)\n"
+                "기존 진행도에 더해지는 방식이야.") != QMessageBox.Yes:
+            return
+        from . import dev_seed
+        try:
+            summary = dev_seed.seed_test_data(self.store)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("seed_test_data failed")
+            QMessageBox.critical(None, "실패", f"오류:\n{exc}")
+            return
+        self._refresh_panels()
+        for a in self.agents:
+            a.reload_buddy()
+        self.primary.window.say("🧪 테스트 데이터 채웠어!", 2600)
+        QMessageBox.information(
+            None, "완료",
+            f"아이템 {summary['items_maxed']}종 최대치 · "
+            f"도감 {summary['dex_filled']}종 · "
+            f"포켓몬 {summary['bag_added']}마리 추가 완료!")
 
     # ---- reset ----
     def on_reset_data(self) -> None:
