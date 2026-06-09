@@ -374,7 +374,7 @@ class BagPanel(QWidget):
             if not ok:
                 QMessageBox.information(
                     self, "파티 가득 참",
-                    "파티는 최대 3마리야. 다른 포켓몬을 먼저 제외해줘.",
+                    "파티는 최대 3마리입니다. 다른 포켓몬을 먼저 제외해 주세요.",
                 )
                 return
         else:
@@ -382,7 +382,7 @@ class BagPanel(QWidget):
             if not ok:
                 QMessageBox.information(
                     self, "최소 1마리",
-                    "파티에는 최소 한 마리는 있어야 해.",
+                    "파티에는 최소 한 마리는 있어야 합니다.",
                 )
                 return
         self.bag_changed.emit()
@@ -416,7 +416,7 @@ class BagPanel(QWidget):
         display = entry.display_name
         confirm = QMessageBox.question(
             self, "방생",
-            f"{display}을(를) 정말 방생할까? (가방에서 영구히 제거됩니다)",
+            f"{display}을(를) 정말 방생할까요? (가방에서 영구히 제거됩니다)",
         )
         if confirm != QMessageBox.Yes:
             return

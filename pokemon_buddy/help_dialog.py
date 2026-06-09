@@ -117,7 +117,7 @@ class HelpDialog(QDialog):
         title_row = QHBoxLayout()
         title_row.setSpacing(8)
         title = QLabel("Pokemon Buddy 사용 안내")
-        tf = QFont(); tf.setBold(True); tf.setPointSize(15)
+        tf = QFont(); tf.setBold(True); tf.setPointSize(12)
         title.setFont(tf)
         title_row.addWidget(title)
         title_row.addStretch(1)

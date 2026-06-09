@@ -809,20 +809,16 @@ class BuddyApp:
         if self.store.bag_count() <= 1:
             QMessageBox.information(
                 None, "보내기 불가",
-                "마지막 한 마리는 보낼 수 없어. 곁에 최소 한 마리는 있어야 해!")
+                "마지막 한 마리는 보낼 수 없습니다. 곁에 최소 한 마리는 있어야 해요.")
             return
-        # The buddy says a random goodbye, then asks for confirmation.
-        farewell = messages.pick_farewell()
-        for a in self.agents:
-            if a.buddy.bag_id == bag_id and a.window.isVisible():
-                a.window.say(farewell, 2600)
-                break
         if QMessageBox.question(
                 None, "포켓몬 보내기",
-                f"{target.display_name}: \"{farewell}\"\n\n"
-                f"정말 날 보낼 거야?\n(보내면 가방에서 사라지고 되돌릴 수 없어)"
+                f"정말 {target.display_name}을(를) 보내시겠어요?\n"
+                f"보내면 가방에서 사라지고 되돌릴 수 없습니다."
                 ) != QMessageBox.Yes:
             return
+        # The goodbye line shows in the send animation window (after 응).
+        farewell = messages.pick_farewell()
         adv = self.store.get_meta("adventurer_name") or "모험가"
         default_name = xfer.suggested_pokemon_filename(target, adv)
         path, _ = QFileDialog.getSaveFileName(
@@ -848,7 +844,7 @@ class BuddyApp:
         self._rebuild_agents()
         self._refresh_panels()
         SendRevealDialog(display_name=display_name, sprite_path=sprite_path,
-                         save_path=path, parent=None).exec()
+                         save_path=path, farewell=farewell, parent=None).exec()
 
     def _ensure_valid_party(self) -> None:
         """Guarantee the active party references only existing bag rows and
@@ -873,7 +869,7 @@ class BuddyApp:
         except Exception as exc:  # noqa: BLE001
             log.exception("import failed")
             QMessageBox.warning(None, "불러오기 실패",
-                                f"이 파일을 불러올 수 없어:\n{exc}")
+                                f"이 파일을 불러올 수 없습니다:\n{exc}")
             return
         if result.get("kind") == "skill":
             self._refresh_panels()
@@ -911,12 +907,12 @@ class BuddyApp:
         if item is None:
             return
         if self.store.get_item_count(item_key) <= 0:
-            QMessageBox.information(None, "보내기 불가", f"{item.label}이(가) 없어.")
+            QMessageBox.information(None, "보내기 불가", f"{item.label}이(가) 없습니다.")
             return
         if QMessageBox.question(
                 None, "스킬 보내기",
-                f"정말 {item.label}을(를) 보내시겠습니까?\n"
-                f"보내면 가방에서 하나 사라져.") != QMessageBox.Yes:
+                f"정말 {item.label}을(를) 보내시겠어요?\n"
+                f"보내면 가방에서 하나 사라집니다.") != QMessageBox.Yes:
             return
         sk = _sk.skill_for_item(item_key)
         default_name = xfer.suggested_skill_filename(sk.name if sk else item.label)
@@ -937,7 +933,7 @@ class BuddyApp:
         self._refresh_panels()
         QMessageBox.information(
             None, "보내기 완료",
-            f"{item.label}을(를) 파일로 보냈어!\n\n저장 위치:\n{path}")
+            f"{item.label}을(를) 파일로 보냈습니다.\n\n저장 위치:\n{path}")
 
     # ---- using special items ----
     def on_use_item(self, item_key: str) -> None:
@@ -1184,7 +1180,7 @@ class BuddyApp:
         display = current if current else "(없음)"
         new_name, ok = QInputDialog.getText(
             None, "모험자 이름 변경",
-            f"현재 이름: {display}\n\n새 이름을 입력해줘 (비우면 기본값 '모험가'):",
+            f"현재 이름: {display}\n\n새 이름을 입력해 주세요 (비우면 기본값 '모험가'):",
             text=current,
         )
         if not ok:
@@ -1345,9 +1341,9 @@ class BuddyApp:
         full dex, a spread of bag pokemon w/ skills)."""
         if QMessageBox.question(
                 None, "테스트 데이터 채우기",
-                "전체 기능 테스트용 데이터를 채울까?\n"
+                "전체 기능 테스트용 데이터를 채울까요?\n"
                 "(아이템 최대치, 도감 전체, 다양한 레벨·친밀도 포켓몬 추가)\n"
-                "기존 진행도에 더해지는 방식이야.") != QMessageBox.Yes:
+                "기존 진행도에 더해집니다.") != QMessageBox.Yes:
             return
         from . import dev_seed
         try:
@@ -1364,15 +1360,15 @@ class BuddyApp:
             None, "완료",
             f"아이템 {summary['items_maxed']}종 최대치 · "
             f"도감 {summary['dex_filled']}종 · "
-            f"포켓몬 {summary['bag_added']}마리 추가 완료!")
+            f"포켓몬 {summary['bag_added']}마리를 추가했습니다.")
 
     # ---- reset ----
     def on_reset_data(self) -> None:
         confirm = QMessageBox.question(
             self.primary.window, "초기화",
-            "모든 포켓몬·도감·가방·모험자 이름까지 지우고 처음부터 다시 시작할까?\n"
-            "(리마인더와 창 위치는 유지)\n\n"
-            "초기화 후엔 앱이 자동으로 종료돼. 다시 실행하면 포켓볼 선택부터 시작!",
+            "모든 포켓몬·도감·가방·모험자 이름까지 지우고 처음부터 다시 시작할까요?\n"
+            "(리마인더와 창 위치는 유지됩니다)\n\n"
+            "초기화 후 앱이 자동으로 종료됩니다. 다시 실행하면 포켓볼 선택부터 시작해요.",
         )
         if confirm != QMessageBox.Yes:
             return
@@ -1389,8 +1385,8 @@ class BuddyApp:
         log.info("reset complete — quitting for clean onboarding next launch")
         QMessageBox.information(
             None, "초기화 완료",
-            "초기화가 끝났어. 앱을 종료할게 — 다시 실행하면\n"
-            "모험자 이름 입력부터 다시 시작할 수 있어 ✨",
+            "초기화가 끝났습니다. 앱을 종료할게요 — 다시 실행하면\n"
+            "모험자 이름 입력부터 다시 시작할 수 있어요 ✨",
         )
         self.qt_app.quit()
 
@@ -1630,6 +1626,11 @@ def main() -> int:
     app.setApplicationDisplayName(APP_NAME)
     app.setOrganizationName("So-On-Park")
     app.setQuitOnLastWindowClosed(False)
+    # Uniform, slightly smaller base font for everything that doesn't set its
+    # own (buttons, menus, QMessageBox). Titles use an explicit ~12pt.
+    _base_font = app.font()
+    _base_font.setPointSize(9)
+    app.setFont(_base_font)
 
     # File-association double-click passes the .pokeball/.scroll path as argv.
     file_arg = _transfer_arg(sys.argv)

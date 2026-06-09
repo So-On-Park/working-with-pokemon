@@ -60,7 +60,7 @@ class _RevealBase(QDialog):
         root.setSpacing(10)
 
         self.headline = QLabel("")
-        hf = QFont(); hf.setBold(True); hf.setPointSize(13)
+        hf = QFont(); hf.setBold(True); hf.setPointSize(12)
         self.headline.setFont(hf)
         self.headline.setAlignment(Qt.AlignCenter)
         self.headline.setWordWrap(True)
@@ -194,17 +194,21 @@ class SendRevealDialog(_RevealBase):
     then shows where the file was saved."""
 
     def __init__(self, *, display_name: str, sprite_path: Optional[Path],
-                 save_path: str, parent: Optional[QWidget] = None) -> None:
+                 save_path: str, farewell: str = "",
+                 parent: Optional[QWidget] = None) -> None:
         super().__init__("포켓몬 보내기", parent)
         self._display_name = display_name
         self._save_path = save_path
 
-        # Start with the buddy visible on top of the (hidden) ball.
+        # Start with the buddy visible on top of the (hidden) ball. The
+        # goodbye line (the buddy's own voice — casual) lives here, not in the
+        # earlier confirm dialog.
         self.ball.setVisible(False)
         sp = self._make_sprite(sprite_path)
         sp.show()
-        self.headline.setText(f"{display_name}을(를) 포켓볼에 넣는 중…")
-        self.sub.setText("")
+        self.headline.setText(f'{display_name}: "{farewell}"' if farewell
+                              else f"{display_name}을(를) 포켓볼에 넣는 중…")
+        self.sub.setText("포켓볼에 넣는 중…")
         self._suck_anim: Optional[QPropertyAnimation] = None
         QTimer.singleShot(700, self._suck_in)
 

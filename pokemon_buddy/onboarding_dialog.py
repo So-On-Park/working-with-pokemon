@@ -141,7 +141,7 @@ class OnboardingDialog(QDialog):
         layout.setSpacing(8)
 
         title = QLabel("환영해, 모험가!")
-        tf = QFont(); tf.setBold(True); tf.setPointSize(16)
+        tf = QFont(); tf.setBold(True); tf.setPointSize(12)
         title.setFont(tf)
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
@@ -184,7 +184,7 @@ class OnboardingDialog(QDialog):
         layout.setSpacing(10)
 
         title = QLabel("포켓볼 4개 중 하나를 골라봐!")
-        tf = QFont(); tf.setBold(True); tf.setPointSize(13)
+        tf = QFont(); tf.setBold(True); tf.setPointSize(12)
         title.setFont(tf)
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)

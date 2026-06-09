@@ -72,7 +72,7 @@ class NavBar(QFrame):
             is_current = (key == current)
             btn.setEnabled(not is_current)
             # Larger glyph size since the emoji is the only visible content.
-            font = QFont(); font.setPointSize(13)
+            font = QFont(); font.setPointSize(12)
             btn.setFont(font)
             btn.setStyleSheet(self._style_for(is_current))
 

@@ -147,7 +147,7 @@ class PokemonDetailDialog(QDialog):
         name_col = QVBoxLayout()
         name_col.setSpacing(2)
         name_lbl = QLabel(buddy.display_name)
-        nf = QFont(); nf.setBold(True); nf.setPointSize(14)
+        nf = QFont(); nf.setBold(True); nf.setPointSize(12)
         name_lbl.setFont(nf)
         name_lbl.setStyleSheet("color: #222;")
         name_col.addWidget(name_lbl)

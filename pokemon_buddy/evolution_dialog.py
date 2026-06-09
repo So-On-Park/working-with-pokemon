@@ -54,7 +54,7 @@ class EvolutionDialog(QDialog):
         title = QLabel(f"? {before_name}가(이) 진화하려고 한다!")
         title_font = QFont()
         title_font.setBold(True)
-        title_font.setPointSize(13)
+        title_font.setPointSize(12)
         title.setFont(title_font)
         title.setAlignment(Qt.AlignCenter)
         root.addWidget(title)
