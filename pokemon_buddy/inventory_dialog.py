@@ -79,7 +79,8 @@ def _dim_pixmap(pm: QPixmap) -> QPixmap:
 
 
 class _ItemTile(QFrame):
-    use_clicked = Signal(str)  # item_key
+    use_clicked = Signal(str)     # item_key — 사용/전수
+    export_clicked = Signal(str)  # item_key — 보내기 (skill scrolls only)
 
     def __init__(self, item: ItemDef, count: int,
                  parent: QWidget | None = None) -> None:
@@ -137,22 +138,47 @@ class _ItemTile(QFrame):
         )
         col.addWidget(count_row)
 
-        # Action button — SPECIAL (사용) and SKILL (전수) tiles.
+        # Action button — SPECIAL (사용), SKILL (전수 + 보내기).
         if item.kind in _ACTION_KINDS:
-            btn = QPushButton("전수" if item.kind == ItemKind.SKILL else "사용")
-            btn.setEnabled(owned)
-            btn.setFixedHeight(18)
-            btn.setStyleSheet(
+            use_style = (
                 "QPushButton {"
                 "  background: #6f4cd6; color: white;"
                 "  border: none; border-radius: 4px;"
-                "  font-size: 8pt; padding: 0px;"
+                "  font-size: 7pt; padding: 0px;"
                 "}"
                 "QPushButton:hover { background: #5d3fc0; }"
                 "QPushButton:disabled { background: #ccc; color: #888; }"
             )
-            btn.clicked.connect(lambda: self.use_clicked.emit(self.item.key))
-            col.addWidget(btn)
+            send_style = (
+                "QPushButton {"
+                "  background: #e8553e; color: white;"
+                "  border: none; border-radius: 4px;"
+                "  font-size: 7pt; padding: 0px;"
+                "}"
+                "QPushButton:hover { background: #cf4631; }"
+                "QPushButton:disabled { background: #ccc; color: #888; }"
+            )
+            use_btn = QPushButton("전수" if item.kind == ItemKind.SKILL else "사용")
+            use_btn.setEnabled(owned)
+            use_btn.setFixedHeight(18)
+            use_btn.setStyleSheet(use_style)
+            use_btn.clicked.connect(lambda: self.use_clicked.emit(self.item.key))
+            if item.kind == ItemKind.SKILL:
+                # Skill scrolls can also be sent to a file.
+                send_btn = QPushButton("보내기")
+                send_btn.setEnabled(owned)
+                send_btn.setFixedHeight(18)
+                send_btn.setStyleSheet(send_style)
+                send_btn.clicked.connect(
+                    lambda: self.export_clicked.emit(self.item.key))
+                brow = QHBoxLayout()
+                brow.setContentsMargins(0, 0, 0, 0)
+                brow.setSpacing(2)
+                brow.addWidget(use_btn)
+                brow.addWidget(send_btn)
+                col.addLayout(brow)
+            else:
+                col.addWidget(use_btn)
 
         # Per-item explanation: hover anywhere on the tile, or click the
         # corner ⓘ, to read what the item does — keeps the tile uncluttered.
@@ -170,6 +196,7 @@ class InventoryPanel(QWidget):
     사용 button. MainPanel forwards this up to the app."""
 
     use_item_requested = Signal(str)
+    export_skill_requested = Signal(str)  # skill item_key → 보내기
 
     def __init__(self, store: Store, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -235,6 +262,8 @@ class InventoryPanel(QWidget):
                 tile = _ItemTile(item, count)
                 if kind in _ACTION_KINDS:
                     tile.use_clicked.connect(self.use_item_requested)
+                if kind == ItemKind.SKILL:
+                    tile.export_clicked.connect(self.export_skill_requested)
                 grid.addWidget(tile, i // 4, i % 4)
             inner_layout.addLayout(grid)
 

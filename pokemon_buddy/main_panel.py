@@ -44,6 +44,7 @@ class MainPanel(QDialog):
     bag_changed = Signal()                # rename / release in BagPanel
     reminders_saved = Signal()            # ReminderPanel Save clicked
     use_item_requested = Signal(str)     # SPECIAL item 사용 clicked
+    export_skill_requested = Signal(str)  # skill 교본 보내기 clicked
     show_detail = Signal(int)            # bag_id — open PokemonDetailDialog
 
     def __init__(self, store: Store, sprite_style: str, active_bag_id: int,
@@ -117,6 +118,7 @@ class MainPanel(QDialog):
         elif key == NAV_INVENTORY:
             panel = InventoryPanel(self.store)
             panel.use_item_requested.connect(self.use_item_requested)
+            panel.export_skill_requested.connect(self.export_skill_requested)
         elif key == NAV_DEX:
             panel = DexPanel(self.store, self.sprite_style)
         elif key == NAV_REMINDERS:

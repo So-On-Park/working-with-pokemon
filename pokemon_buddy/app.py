@@ -476,6 +476,10 @@ class BuddyApp:
         custom_act.triggered.connect(self.on_add_custom_pokemon)
         menu.addAction(custom_act)
 
+        import_act = QAction("포켓몬 / 스킬 불러오기…", menu)
+        import_act.triggered.connect(self.on_open_import_dialog)
+        menu.addAction(import_act)
+
         # Test actions — hidden until the user toggles developer mode via
         # the secret pokéball tap inside HelpDialog.
         if dev:
@@ -587,6 +591,7 @@ class BuddyApp:
         dlg.set_as_buddy.connect(self.on_swap_buddy)
         dlg.reminders_saved.connect(self.reminder_scheduler.check_now)
         dlg.use_item_requested.connect(self.on_use_item)
+        dlg.export_skill_requested.connect(self.on_export_skill)
         dlg.show_detail.connect(self.on_show_pokemon_detail)
         dlg.bag_changed.connect(self._on_bag_changed)
         self._main_panel = dlg
@@ -770,6 +775,8 @@ class BuddyApp:
         dlg = PokemonDetailDialog(target, self.sprite_style, parent=parent)
         dlg.display_scale_changed.connect(self._on_display_scale_changed)
         dlg.exec()
+        if getattr(dlg, "send_requested", False):
+            self.on_send_pokemon(bag_id)
 
     def _on_display_scale_changed(self, dex_id: int, scale: float) -> None:
         """Live-refresh every party member currently rendering `dex_id` so
@@ -777,6 +784,149 @@ class BuddyApp:
         for agent in self.agents:
             if agent.buddy.dex_id == dex_id:
                 agent.window.set_display_scale(scale)
+
+    # ---- transfer: send / receive pokemon + skills ----
+    def _refresh_panels(self) -> None:
+        mp = getattr(self, "_main_panel", None)
+        if mp is not None:
+            try:
+                mp.refresh_bag(); mp.refresh_dex(); mp.refresh_inventory()
+            except RuntimeError:
+                pass
+        self._update_tray_status()
+
+    def on_send_pokemon(self, bag_id: int) -> None:
+        """보내기: confirm → save .pokeball → remove from bag → reveal."""
+        from . import pokemon_transfer as xfer
+        from .transfer_dialogs import SendRevealDialog
+        target = self.store.get_bag_entry(bag_id)
+        if target is None:
+            return
+        if self.store.bag_count() <= 1:
+            QMessageBox.information(
+                None, "보내기 불가",
+                "마지막 한 마리는 보낼 수 없어. 곁에 최소 한 마리는 있어야 해!")
+            return
+        if QMessageBox.question(
+                None, "포켓몬 보내기",
+                f"정말 {target.display_name}을(를) 보내시겠습니까?\n"
+                f"보내면 내 가방에서 사라지고 되돌릴 수 없어.") != QMessageBox.Yes:
+            return
+        adv = self.store.get_meta("adventurer_name") or "모험가"
+        default_name = xfer.suggested_pokemon_filename(target, adv)
+        path, _ = QFileDialog.getSaveFileName(
+            None, "포켓몬 파일 저장", default_name,
+            f"Pokemon Buddy 포켓몬 (*{xfer.POKEMON_EXT})")
+        if not path:
+            return
+        if not path.lower().endswith(xfer.POKEMON_EXT):
+            path += xfer.POKEMON_EXT
+        sprite_path = get_buddy_sprite_with_fallback(
+            self.sprite_style, target.dex_id, target.is_rare)
+        display_name = target.display_name
+        try:
+            xfer.export_pokemon(self.store, bag_id, Path(path),
+                                adventurer_name=adv)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("send export failed")
+            QMessageBox.critical(None, "보내기 실패", f"내보내는 중 오류:\n{exc}")
+            return
+        # Real transfer — remove the individual, keeping the party valid.
+        self.store.remove_from_bag(bag_id)
+        self._ensure_valid_party()
+        self._rebuild_agents()
+        self._refresh_panels()
+        SendRevealDialog(display_name=display_name, sprite_path=sprite_path,
+                         save_path=path, parent=None).exec()
+
+    def _ensure_valid_party(self) -> None:
+        """Guarantee the active party references only existing bag rows and
+        is non-empty (so self.primary never points at a ghost). Used after a
+        send removes a — possibly the only — party member."""
+        party = [bid for bid in self.store.load_active_party()
+                 if self.store.get_bag_entry(bid) is not None]
+        if not party:
+            bag = self.store.list_bag()
+            if bag:
+                party = [bag[0].bag_id]
+        if party:
+            self.store.save_active_party(party)
+            self.store.set_meta("active_bag_id", str(party[0]))
+
+    def on_import_transfer_file(self, path) -> None:
+        """Import a .pokeball / .scroll file, then play the reveal."""
+        from . import pokemon_transfer as xfer
+        from .transfer_dialogs import ReceiveRevealDialog
+        try:
+            result = xfer.import_file(self.store, Path(path))
+        except Exception as exc:  # noqa: BLE001
+            log.exception("import failed")
+            QMessageBox.warning(None, "불러오기 실패",
+                                f"이 파일을 불러올 수 없어:\n{exc}")
+            return
+        if result.get("kind") == "skill":
+            self._refresh_panels()
+            self.primary.window.say(
+                f"📜 {result['skill_name']} 교본을 받았어! 가방에서 전수할 수 있어 ✨",
+                3200)
+            self.primary.anim.play("happy")
+            return
+        # pokemon → goes to bag storage (not auto-party); refresh + reveal.
+        self._refresh_panels()
+        sprite_path = get_buddy_sprite_with_fallback(
+            self.sprite_style, result["dex_id"], result["is_rare"])
+        ReceiveRevealDialog(
+            display_name=result["display_name"],
+            species_name=result["species_name"],
+            sprite_path=sprite_path, is_new_dex=result["is_new_dex"],
+            is_rare=result["is_rare"], parent=None,
+        ).exec()
+
+    def on_open_import_dialog(self) -> None:
+        from . import pokemon_transfer as xfer
+        path, _ = QFileDialog.getOpenFileName(
+            None, "포켓몬 / 스킬 불러오기", "",
+            f"Pokemon Buddy 파일 (*{xfer.POKEMON_EXT} *{xfer.SKILL_EXT});;"
+            "모든 파일 (*)")
+        if not path:
+            return
+        self.on_import_transfer_file(path)
+
+    def on_export_skill(self, item_key: str) -> None:
+        """보내기 from a skill 교본 tile → save a .scroll file, consume one."""
+        from . import pokemon_transfer as xfer
+        from . import skills as _sk
+        item = find_item(item_key)
+        if item is None:
+            return
+        if self.store.get_item_count(item_key) <= 0:
+            QMessageBox.information(None, "보내기 불가", f"{item.label}이(가) 없어.")
+            return
+        if QMessageBox.question(
+                None, "스킬 보내기",
+                f"정말 {item.label}을(를) 보내시겠습니까?\n"
+                f"보내면 가방에서 하나 사라져.") != QMessageBox.Yes:
+            return
+        sk = _sk.skill_for_item(item_key)
+        default_name = xfer.suggested_skill_filename(sk.name if sk else item.label)
+        path, _ = QFileDialog.getSaveFileName(
+            None, "스킬 파일 저장", default_name,
+            f"Pokemon Buddy 스킬 (*{xfer.SKILL_EXT})")
+        if not path:
+            return
+        if not path.lower().endswith(xfer.SKILL_EXT):
+            path += xfer.SKILL_EXT
+        try:
+            xfer.export_skill(self.store, item_key, Path(path))
+        except Exception as exc:  # noqa: BLE001
+            log.exception("skill export failed")
+            QMessageBox.critical(None, "보내기 실패", f"오류:\n{exc}")
+            return
+        self.store.consume_item(item_key, 1)
+        self._refresh_panels()
+        QMessageBox.information(
+            None, "보내기 완료",
+            f"{item.label}을(를) 파일로 보냈어!\n\n저장 위치:\n{path}")
 
     # ---- using special items ----
     def on_use_item(self, item_key: str) -> None:
@@ -1384,6 +1534,24 @@ def _set_windows_app_id(app_id: str) -> None:
         log.debug("AppUserModelID set failed: %s", exc)
 
 
+_IPC_SERVER_NAME = "PokemonBuddyIPC"
+
+
+def _transfer_arg(argv) -> Optional[str]:
+    """First CLI argument that is an existing .pokeball / .scroll file —
+    set when the user double-clicks an associated file in Explorer."""
+    from .pokemon_transfer import POKEMON_EXT, SKILL_EXT
+    for a in argv[1:]:
+        low = a.lower()
+        if (low.endswith(POKEMON_EXT) or low.endswith(SKILL_EXT)):
+            try:
+                if Path(a).exists():
+                    return str(Path(a).resolve())
+            except OSError:
+                pass
+    return None
+
+
 def main() -> int:
     # Two-tier logging:
     #   debug.log (file) ← DEBUG and up — full system trace, useful when
@@ -1426,6 +1594,26 @@ def main() -> int:
     app.setOrganizationName("So-On-Park")
     app.setQuitOnLastWindowClosed(False)
 
+    # File-association double-click passes the .pokeball/.scroll path as argv.
+    file_arg = _transfer_arg(sys.argv)
+
+    # Single instance: if Pokemon Buddy is already running, hand the file off
+    # to it (so importing doesn't spawn a second pet) and exit. Otherwise we
+    # become the server that listens for future hand-offs.
+    from PySide6.QtNetwork import QLocalServer, QLocalSocket
+    probe = QLocalSocket()
+    probe.connectToServer(_IPC_SERVER_NAME)
+    if probe.waitForConnected(300):
+        probe.write((file_arg or "").encode("utf-8"))
+        probe.flush()
+        probe.waitForBytesWritten(500)
+        probe.disconnectFromServer()
+        log.info("another instance is running — handed off (file=%s)", file_arg)
+        return 0
+    QLocalServer.removeServer(_IPC_SERVER_NAME)  # clear any stale socket
+    ipc_server = QLocalServer()
+    ipc_server.listen(_IPC_SERVER_NAME)
+
     if not QSystemTrayIcon.isSystemTrayAvailable():
         QMessageBox.critical(None, APP_NAME,
                              "시스템 트레이를 사용할 수 없는 환경입니다.")
@@ -1433,7 +1621,26 @@ def main() -> int:
 
     buddy_app = BuddyApp(app)
     app.setWindowIcon(_tray_icon(buddy_app.primary.buddy, buddy_app.sprite_style))
-    _ = buddy_app
+    buddy_app._ipc_server = ipc_server  # keep a strong ref
+
+    def _on_ipc_connection() -> None:
+        conn = ipc_server.nextPendingConnection()
+        if conn is None:
+            return
+        if conn.waitForReadyRead(500):
+            data = bytes(conn.readAll().data()).decode("utf-8", "ignore").strip()
+            if data:
+                QTimer.singleShot(0, lambda p=data:
+                                  buddy_app.on_import_transfer_file(p))
+        conn.disconnectFromServer()
+
+    ipc_server.newConnection.connect(_on_ipc_connection)
+
+    # Imported-by-double-click on first launch: play the reveal once the
+    # window/tray have settled.
+    if file_arg:
+        QTimer.singleShot(900, lambda: buddy_app.on_import_transfer_file(file_arg))
+
     return app.exec()
 
 

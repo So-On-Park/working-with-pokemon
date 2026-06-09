@@ -76,8 +76,10 @@ assets/*
 !assets/custom_pokemon.json
 !assets/9[0-9][0-9][0-9]_*.gif
 
-# App / tray icon (메타몽 #0132) — a build input, tracked despite assets/*.
+# App / tray icon (메타몽 #0132) + file-type icons — build inputs, tracked.
 !assets/icon.ico
+!assets/pokeball.ico
+!assets/scroll.ico
 
 # Extracted release folders
 PokemonBuddy-*-win64/

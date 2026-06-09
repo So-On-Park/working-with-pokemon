@@ -120,6 +120,9 @@ class PokemonDetailDialog(QDialog):
         self.setMinimumSize(380, 540)
         self.setWindowFlag(Qt.WindowStaysOnTopHint, True)
         self._dex_id = buddy.dex_id
+        self.bag_id = buddy.bag_id
+        # Set True by the 보내기 button; BuddyApp acts on it after exec().
+        self.send_requested = False
 
         self._sprites: List[AnimatedSprite] = []
 
@@ -190,7 +193,8 @@ class PokemonDetailDialog(QDialog):
                                      value_color="#6f4cd6"))
 
         # Gender (resolved deterministically from bag_id + species)
-        gender_code = pokemon_info.gender_for(buddy.dex_id, buddy.bag_id)
+        gender_code = buddy.gender or pokemon_info.gender_for(
+            buddy.dex_id, buddy.bag_id)
         inner_layout.addWidget(_row("성별", _gender_label(gender_code)))
 
         # Catch metadata
@@ -326,14 +330,31 @@ class PokemonDetailDialog(QDialog):
         scale_row.addStretch(1)
         root.addLayout(scale_row)
 
-        # Close button
+        # Bottom buttons: 보내기(파일로 전송) + 닫기
         btn_row = QHBoxLayout()
+        send_btn = QPushButton("📤 보내기")
+        send_btn.setFixedHeight(26)
+        send_btn.setToolTip("이 포켓몬을 파일로 내보내 다른 사람에게 보낼 수 있어 "
+                            "(보내면 내 가방에서는 사라져).")
+        send_btn.setStyleSheet(
+            "QPushButton { background: #e8553e; color: white; border: none;"
+            "  border-radius: 5px; padding: 0 12px; font-size: 9pt; }"
+            "QPushButton:hover { background: #cf4631; }"
+        )
+        send_btn.clicked.connect(self._on_send_clicked)
+        btn_row.addWidget(send_btn)
         btn_row.addStretch(1)
         close_btn = QPushButton("닫기")
         close_btn.setFixedSize(60, 26)
         close_btn.clicked.connect(self.accept)
         btn_row.addWidget(close_btn)
         root.addLayout(btn_row)
+
+    def _on_send_clicked(self) -> None:
+        # Flag + close; BuddyApp handles the send after exec() returns so we
+        # don't stack a confirm/animation dialog on top of this modal.
+        self.send_requested = True
+        self.accept()
 
     def _on_scale_changed(self, value: float) -> None:
         _display_scale.set_scale(self._dex_id, float(value))
