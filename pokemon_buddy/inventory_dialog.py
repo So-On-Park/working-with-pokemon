@@ -57,6 +57,7 @@ TILE_H_PLAIN = 84
 TILE_H_SPECIAL = 104
 ICON_PX = 36
 COUNT_CAP = 999   # displayed counts never exceed this
+_GRID_COLS = 4    # tiles per row (all sections share this for alignment)
 
 
 def _load_item_pixmap(item: ItemDef, side: int) -> Optional[QPixmap]:
@@ -269,33 +270,43 @@ class InventoryPanel(QWidget):
             "🎒 기본 아이템",
             "밥주기·놀아주기·포획에 쓰는 기본 아이템. 음식/장난감은 줄 때마다 "
             "랜덤으로 골라 줘요."))
-        basic = QGridLayout()
-        basic.setSpacing(4)
-        basic.setContentsMargins(0, 0, 0, 4)
+        _AL = Qt.AlignLeft | Qt.AlignTop
+
+        def _new_grid() -> QGridLayout:
+            g = QGridLayout()
+            g.setSpacing(4)
+            g.setContentsMargins(0, 0, 0, 4)
+            # Uniform fixed-width columns + a trailing stretch column so tiles
+            # pack tidily to the left and line up across every section.
+            for c in range(_GRID_COLS):
+                g.setColumnStretch(c, 0)
+                g.setColumnMinimumWidth(c, TILE_W)
+            g.setColumnStretch(_GRID_COLS, 1)
+            return g
+
+        basic = _new_grid()
         basic.addWidget(_ItemTile(_REP_ITEM[ItemKind.FOOD],
-                                  totals[ItemKind.FOOD]), 0, 0)
+                                  totals[ItemKind.FOOD]), 0, 0, _AL)
         basic.addWidget(_ItemTile(_REP_ITEM[ItemKind.TOY],
-                                  totals[ItemKind.TOY]), 0, 1)
+                                  totals[ItemKind.TOY]), 0, 1, _AL)
         pballs = items_of(ItemKind.POKEBALL)
         if pballs:
-            basic.addWidget(_ItemTile(pballs[0], totals[ItemKind.POKEBALL]), 0, 2)
-        basic.setColumnStretch(3, 1)  # keep the three tiles left-packed
+            basic.addWidget(_ItemTile(pballs[0],
+                                      totals[ItemKind.POKEBALL]), 0, 2, _AL)
         inner_layout.addLayout(basic)
 
         # ---- 특수 아이템 / 기술 교본 — own sections (multiple tiles) ----
         for kind in [ItemKind.SPECIAL, ItemKind.SKILL]:
             title, hint = KIND_LABELS[kind]
             inner_layout.addWidget(_header(title, hint))
-            grid = QGridLayout()
-            grid.setSpacing(4)
-            grid.setContentsMargins(0, 0, 0, 4)
+            grid = _new_grid()
             for i, item in enumerate(items_of(kind)):
                 count = self.store.get_item_count(item.key)
                 tile = _ItemTile(item, count)
                 tile.use_clicked.connect(self.use_item_requested)
                 if kind == ItemKind.SKILL:
                     tile.export_clicked.connect(self.export_skill_requested)
-                grid.addWidget(tile, i // 4, i % 4)
+                grid.addWidget(tile, i // _GRID_COLS, i % _GRID_COLS, _AL)
             inner_layout.addLayout(grid)
 
         inner_layout.addStretch(1)
