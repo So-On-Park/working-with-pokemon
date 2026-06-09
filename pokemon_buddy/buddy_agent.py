@@ -184,21 +184,22 @@ class BuddyAgent(QObject):
         self._update_status()
 
     def on_feed(self) -> None:
-        food_key = self.store.first_available_of_kind(ItemKind.FOOD.value)
+        # Eat a RANDOM food so it's a different one each time.
+        food_key = self.store.random_available_of_kind(ItemKind.FOOD.value)
         if food_key is None or not self.store.consume_item(food_key, 1):
             self.window.say("먹을 게 없네… 🍎 모아야 해!", 2400)
             return
         item = find_item(food_key)
         self.store.bump_friendship(self.buddy, FRIENDSHIP_FEED)
         self.buddy = self.store.get_bag_entry(self.buddy.bag_id) or self.buddy
-        line = messages.pick(messages.FEED, self.buddy.friendship)
         emoji = item.emoji if item else "🍎"
-        self.window.say(f"{emoji} {line}", 2400)
+        self.window.say(f"{emoji} {messages.pick_food_line(food_key)}", 2400)
         self.anim.play("eat")
         self._update_status()
 
     def on_play(self) -> None:
-        toy_key = self.store.first_available_of_kind(ItemKind.TOY.value)
+        # Play with a RANDOM toy so it varies each time.
+        toy_key = self.store.random_available_of_kind(ItemKind.TOY.value)
         if toy_key is None or not self.store.consume_item(toy_key, 1):
             self.window.say("장난감이 없어… 🎾 찾아봐!", 2400)
             return
@@ -213,8 +214,7 @@ class BuddyAgent(QObject):
             self._after_level_up()
         else:
             emoji = item.emoji if item else "🎾"
-            line = messages.pick(messages.PLAY, self.buddy.friendship)
-            self.window.say(f"{emoji} {line}", 2400)
+            self.window.say(f"{emoji} {messages.pick_toy_line(toy_key)}", 2400)
             self.anim.play("happy")
         self._update_status()
 

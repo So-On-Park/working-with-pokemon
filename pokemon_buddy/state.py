@@ -1357,6 +1357,19 @@ class Store:
         ).fetchone()
         return row["item_key"] if row else None
 
+    def random_available_of_kind(self, kind: str) -> Optional[str]:
+        """A RANDOM owned item_key of the given kind (count > 0), or None.
+        Feed/play use this so the buddy eats a different food / plays with a
+        different toy each time."""
+        import random as _r
+        prefix = f"{kind}."
+        rows = self.conn.execute(
+            "SELECT item_key FROM inventory WHERE item_key LIKE ? AND count > 0",
+            (prefix + "%",),
+        ).fetchall()
+        keys = [r["item_key"] for r in rows]
+        return _r.choice(keys) if keys else None
+
     # ---------- reset ----------
     def reset_all_data(self) -> None:
         """Wipe gameplay state (bag, dex, inventory, active pointer) and

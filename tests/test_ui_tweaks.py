@@ -33,6 +33,25 @@ def test_collector_and_catcher_lines_nonempty():
     assert messages.COLLECTOR_LINES and messages.CATCHER_LINES
 
 
+def test_random_available_of_kind(store, temp_assets):
+    store.add_item("food.cake", 1)
+    keys = {store.random_available_of_kind("food") for _ in range(30)}
+    # only owned foods come back, and more than one variety can appear
+    assert keys and all(k.startswith("food.") for k in keys)
+    for k in keys:
+        assert store.get_item_count(k) > 0
+    # a kind with nothing owned → None (no special items by default)
+    assert store.random_available_of_kind("special") is None
+
+
+def test_food_toy_flavor_lines():
+    assert messages.pick_food_line("food.apple") in messages.FOOD_LINES["food.apple"]
+    assert messages.pick_toy_line("toy.ball") in messages.TOY_LINES["toy.ball"]
+    # unknown key falls back to a generic line (non-empty)
+    assert messages.pick_food_line("food.unknown")
+    assert messages.pick_toy_line("toy.unknown")
+
+
 def test_catcher_skill_registered():
     from pokemon_buddy import skills
     sk = skills.find(skills.SKILL_CATCHER)

@@ -810,6 +810,31 @@ def pick_catcher() -> str:
     return random.choice(CATCHER_LINES)
 
 
+# Per-food / per-toy flavor lines — the buddy reacts differently to each.
+FOOD_LINES: Dict[str, List[str]] = {
+    "food.apple":  ["아삭아삭 사과 맛있다!", "사과는 언제나 옳아 🍎", "한 입 더 줄래?"],
+    "food.berry":  ["달콤한 딸기 최고!", "딸기 더 없어? 🍓", "새콤달콤 좋아!"],
+    "food.cake":   ["케이크라니, 오늘 무슨 날이야? 🍰", "달다 달아~", "특별한 기분이야!"],
+    "food.cookie": ["바삭한 과자 좋아! 🍪", "과자 부스러기까지 싹싹", "이거 중독성 있어!"],
+}
+_FOOD_DEFAULT = ["냠냠, 맛있어!", "잘 먹었어!", "배불러~ 고마워!"]
+
+TOY_LINES: Dict[str, List[str]] = {
+    "toy.ball":  ["공놀이 가자! 🎾", "데굴데굴 신난다", "또 던져줘!"],
+    "toy.kite":  ["연 날리자! 🪁", "바람 타고 훨훨~", "하늘 높이 올라간다!"],
+    "toy.bell":  ["딸랑딸랑 방울 소리 좋아 🔔", "이 소리 좋은데?", "딸랑딸랑~ 신나!"],
+}
+_TOY_DEFAULT = ["신난다! 같이 놀자!", "재밌어!", "더 놀고 싶어!"]
+
+
+def pick_food_line(item_key: str) -> str:
+    return random.choice(FOOD_LINES.get(item_key, _FOOD_DEFAULT))
+
+
+def pick_toy_line(item_key: str) -> str:
+    return random.choice(TOY_LINES.get(item_key, _TOY_DEFAULT))
+
+
 # Probability of drawing from the hidden bond-max pool when the buddy is
 # at friendship 100. Lower than 1.0 so regular AFFECTIONATE chatter still
 # appears occasionally — keeps variety.

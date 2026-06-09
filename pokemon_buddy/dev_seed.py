@@ -22,7 +22,7 @@ from .items import ITEMS
 from .pokemon_names import get_name_cached
 from .state import Store
 
-ITEM_MAX = 99
+ITEM_MAX = 999
 
 # (dex_id, level, friendship, is_rare, personality, skill_keys)
 _BAG_SPREAD: List[Tuple[int, int, int, bool, str, list]] = [

@@ -41,10 +41,20 @@ KIND_LABELS = {
 # Item kinds that get an action button on their tile (사용/전수).
 _ACTION_KINDS = {ItemKind.SPECIAL, ItemKind.SKILL}
 
+# Food / toy are shown as a SINGLE representative tile holding the kind's
+# total count (밥주기/놀아주기 pick a random one each time, so individual
+# variants don't need their own tiles).
+_REP_ITEM = {
+    ItemKind.FOOD: ItemDef("food", ItemKind.FOOD, "🍎", "음식",
+                           description="밥주기에 쓰는 음식. 줄 때마다 랜덤으로 골라 줘요."),
+    ItemKind.TOY:  ItemDef("toy", ItemKind.TOY, "🎾", "장난감",
+                           description="놀아주기에 쓰는 장난감. 놀 때마다 랜덤으로 골라 줘요."),
+}
+
 # Heights vary by section so the SPECIAL tiles can fit a "사용" button.
 TILE_W = 82
-TILE_H_PLAIN = 76
-TILE_H_SPECIAL = 100
+TILE_H_PLAIN = 84
+TILE_H_SPECIAL = 104
 ICON_PX = 36
 
 
@@ -110,13 +120,15 @@ class _ItemTile(QFrame):
         # Icon — pokeball/sprite if available, else emoji glyph fallback.
         icon = QLabel()
         icon.setAlignment(Qt.AlignCenter)
-        icon.setFixedHeight(ICON_PX + 4)
+        # A touch more room + a slightly smaller emoji so the glyph isn't
+        # clipped on any edge.
+        icon.setFixedHeight(ICON_PX + 12)
         pm = _load_item_pixmap(item, ICON_PX)
         if pm is not None:
             icon.setPixmap(_dim_pixmap(pm) if not owned else pm)
         else:
             icon.setText(item.emoji)
-            f = QFont(); f.setPointSize(18)
+            f = QFont(); f.setPointSize(16)
             icon.setFont(f)
             if not owned:
                 icon.setStyleSheet("color: #aaa;")
@@ -248,6 +260,8 @@ class InventoryPanel(QWidget):
             head = QLabel(title)
             head_font = QFont(); head_font.setBold(True); head_font.setPointSize(10)
             head.setFont(head_font)
+            # A little left padding so the leading emoji isn't clipped.
+            head.setStyleSheet("padding-left: 2px;")
             head_row.addWidget(head)
             head_row.addWidget(InfoIcon(hint))
             head_row.addStretch(1)
@@ -256,14 +270,20 @@ class InventoryPanel(QWidget):
             grid = QGridLayout()
             grid.setSpacing(4)
             grid.setContentsMargins(0, 0, 0, 4)
-            for i, item in enumerate(items_of(kind)):
-                count = self.store.get_item_count(item.key)
-                tile = _ItemTile(item, count)
-                if kind in _ACTION_KINDS:
-                    tile.use_clicked.connect(self.use_item_requested)
-                if kind == ItemKind.SKILL:
-                    tile.export_clicked.connect(self.export_skill_requested)
-                grid.addWidget(tile, i // 4, i % 4)
+            if kind in _REP_ITEM:
+                # Food / toy → one representative tile with the kind's total.
+                rep = _REP_ITEM[kind]
+                total = self.store.total_of_kind(kind.value)
+                grid.addWidget(_ItemTile(rep, total), 0, 0)
+            else:
+                for i, item in enumerate(items_of(kind)):
+                    count = self.store.get_item_count(item.key)
+                    tile = _ItemTile(item, count)
+                    if kind in _ACTION_KINDS:
+                        tile.use_clicked.connect(self.use_item_requested)
+                    if kind == ItemKind.SKILL:
+                        tile.export_clicked.connect(self.export_skill_requested)
+                    grid.addWidget(tile, i // 4, i % 4)
             inner_layout.addLayout(grid)
 
         inner_layout.addStretch(1)
