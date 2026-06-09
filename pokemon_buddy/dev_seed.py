@@ -75,5 +75,25 @@ def seed_test_data(store: Store) -> dict:
         )
         added += 1
 
+    # A Lv.100 champion that knows BOTH skills, placed in the party so 명포수
+    # auto-catch + 수집광 magnetize can be tested right away. Added only once
+    # (skip if some bag member already knows 명포수) so repeat seeding doesn't
+    # pile up duplicates.
+    has_catcher = any(b.has_skill(skills_mod.SKILL_CATCHER)
+                      for b in store.list_bag())
+    champion_added = False
+    if not has_catcher:
+        champ = store.import_bag_entry(
+            dex_id=6, is_rare=False, level=100, friendship=100,
+            nickname="챔프", personality="brave",
+            skills=json.dumps([skills_mod.SKILL_COLLECTOR,
+                               skills_mod.SKILL_CATCHER], ensure_ascii=False),
+        )
+        added += 1
+        champion_added = True
+        # Make sure it's actually on screen (party) so the skills fire.
+        if not store.add_to_party(champ.bag_id):
+            store.swap_active_buddy(champ.bag_id)
+
     return {"items_maxed": len(ITEMS), "dex_filled": dex_filled,
-            "bag_added": added}
+            "bag_added": added, "champion_added": champion_added}

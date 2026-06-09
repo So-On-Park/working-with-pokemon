@@ -10,7 +10,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QToolTip, QWidget
 
-_ICON_PX = 16
+_ICON_PX = 13
 
 
 class InfoIcon(QLabel):
@@ -23,14 +23,15 @@ class InfoIcon(QLabel):
         self.setCursor(Qt.PointingHandCursor)
         self.setAlignment(Qt.AlignCenter)
         self.setFixedSize(_ICON_PX, _ICON_PX)
+        # Subtle: muted gray, not an attention-grabbing blue.
         self.setStyleSheet(
             "QLabel {"
-            "  background: #4a7ddc; color: white;"
+            "  background: #e2e2e2; color: #777;"
             f"  border-radius: {_ICON_PX // 2}px;"
             "  font-weight: bold; font-style: italic;"
-            "  font-family: 'Segoe UI', Arial, sans-serif; font-size: 9pt;"
+            "  font-family: 'Segoe UI', Arial, sans-serif; font-size: 7pt;"
             "}"
-            "QLabel:hover { background: #2f5bb7; }"
+            "QLabel:hover { background: #cfcfcf; color: #555; }"
         )
 
     def set_info(self, text: str) -> None:

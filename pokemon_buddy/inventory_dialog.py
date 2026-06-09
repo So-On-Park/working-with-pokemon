@@ -180,14 +180,13 @@ class _ItemTile(QFrame):
             else:
                 col.addWidget(use_btn)
 
-        # Per-item explanation: hover anywhere on the tile, or click the
-        # corner ⓘ, to read what the item does — keeps the tile uncluttered.
+        # Per-item explanation simply on hover — set the tooltip on the tile
+        # and its labels (icon / name / count) so pointing at the item shows
+        # what it does. No extra icon needed.
         if item.description:
             self.setToolTip(item.description)
-            info = InfoIcon(item.description, self)
-            info.resize(16, 16)
-            info.move(TILE_W - 17, 2)
-            info.raise_()
+            for lbl in self.findChildren(QLabel):
+                lbl.setToolTip(item.description)
 
 
 class InventoryPanel(QWidget):

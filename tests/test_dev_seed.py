@@ -40,6 +40,18 @@ def test_seed_adds_varied_bag_with_skills(store, temp_assets):
     assert any(b.has_skill(skills.SKILL_COLLECTOR) for b in bag)
 
 
+def test_seed_adds_lv100_catcher_champion_in_party(store, temp_assets):
+    dev_seed.seed_test_data(store)
+    champs = [b for b in store.list_bag()
+              if b.has_skill(skills.SKILL_CATCHER)]
+    assert champs, "expected a 명포수 champion"
+    champ = champs[0]
+    assert champ.level == 100
+    assert champ.has_skill(skills.SKILL_COLLECTOR)
+    # On screen so the skills actually fire.
+    assert store.party_slot(champ.bag_id) is not None
+
+
 def test_seed_is_repeatable(store, temp_assets):
     dev_seed.seed_test_data(store)
     # running again shouldn't blow up or drop inventory below max
