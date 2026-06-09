@@ -25,11 +25,11 @@ def test_seed_maxes_special_and_caps_food_toy(store, temp_assets):
 def test_seed_fills_full_gen1_dex(store, temp_assets):
     summary = dev_seed.seed_test_data(store)
     assert summary["dex_filled"] >= 151
-    # spot-check a few species are now caught
+    # normal + rare for every Gen-1 species
     for dex in (1, 25, 151):
         assert store.get_dex_entry(dex, is_rare=False) is not None
-    # at least one rare variant recorded
-    assert store.get_dex_entry(25, is_rare=True) is not None
+    for dex in range(1, 152):
+        assert store.get_dex_entry(dex, is_rare=True) is not None
 
 
 def test_seed_adds_varied_bag_with_skills(store, temp_assets):

@@ -72,8 +72,10 @@ def seed_test_data(store: Store) -> dict:
     for dex in custom_pokemon.list_dex_ids():
         store.record_catch(dex, custom_pokemon.get_custom_name(dex) or _name(dex))
         dex_filled += 1
-    for dex in (6, 25, 150):
+    # Every Gen-1 rare (shiny) variant too — customs have no shiny art.
+    for dex in range(1, 152):
         store.record_catch(dex, _name(dex), is_rare=True)
+        dex_filled += 1
 
     # 3) Bag — a spread of levels / friendship / skills.
     added = 0
