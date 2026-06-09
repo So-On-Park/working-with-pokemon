@@ -81,6 +81,12 @@ assets/*
 !assets/pokeball.ico
 !assets/scroll.ico
 
+# Starter sprites shown in README — tracked so they render on GitHub.
+!assets/0001_showdown.gif
+!assets/0004_showdown.gif
+!assets/0007_showdown.gif
+!assets/0025_showdown.gif
+
 # Extracted release folders
 PokemonBuddy-*-win64/
 
