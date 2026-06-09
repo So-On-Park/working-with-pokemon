@@ -854,13 +854,14 @@ class BuddyApp:
         target = self.store.get_bag_entry(bag_id)
         if target is None:
             return
+        parent = self._dialog_parent()
         if self.store.bag_count() <= 1:
             QMessageBox.information(
-                None, "보내기 불가",
+                parent, "보내기 불가",
                 "마지막 한 마리는 보낼 수 없습니다. 곁에 최소 한 마리는 있어야 해요.")
             return
         if QMessageBox.question(
-                None, "포켓몬 보내기",
+                parent, "포켓몬 보내기",
                 f"정말 {target.display_name}을(를) 보내시겠어요?\n"
                 f"보내면 가방에서 사라지고 되돌릴 수 없습니다."
                 ) != QMessageBox.Yes:
@@ -868,7 +869,7 @@ class BuddyApp:
         adv = self.store.get_meta("adventurer_name") or "모험가"
         default_name = xfer.suggested_pokemon_filename(target, adv)
         path, _ = QFileDialog.getSaveFileName(
-            None, "포켓몬 파일 저장", default_name,
+            parent, "포켓몬 파일 저장", default_name,
             f"Pokemon Buddy 포켓몬 (*{xfer.POKEMON_EXT})")
         if not path:
             return
@@ -882,7 +883,7 @@ class BuddyApp:
         # before the buddy goes into the ball. We only write the file +
         # remove the buddy if the user goes through with it.
         dlg = SendRevealDialog(display_name=display_name, sprite_path=sprite_path,
-                               farewell=farewell, parent=None)
+                               farewell=farewell, parent=parent)
         if dlg.exec() != SendRevealDialog.Accepted:
             return
         try:
@@ -890,7 +891,7 @@ class BuddyApp:
                                 adventurer_name=adv)
         except Exception as exc:  # noqa: BLE001
             log.exception("send export failed")
-            QMessageBox.critical(None, "보내기 실패", f"내보내는 중 오류:\n{exc}")
+            QMessageBox.critical(parent, "보내기 실패", f"내보내는 중 오류:\n{exc}")
             return
         # Real transfer — remove the individual, keeping the party valid.
         self.store.remove_from_bag(bag_id)
@@ -920,7 +921,7 @@ class BuddyApp:
             result = xfer.import_file(self.store, Path(path))
         except Exception as exc:  # noqa: BLE001
             log.exception("import failed")
-            QMessageBox.warning(None, "불러오기 실패",
+            QMessageBox.warning(self._dialog_parent(), "불러오기 실패",
                                 f"이 파일을 불러올 수 없습니다:\n{exc}")
             return
         # A transfer file is single-use — once imported, delete it so the
@@ -944,18 +945,30 @@ class BuddyApp:
             display_name=result["display_name"],
             species_name=result["species_name"],
             sprite_path=sprite_path, is_new_dex=result["is_new_dex"],
-            is_rare=result["is_rare"], parent=None,
+            is_rare=result["is_rare"], parent=self._dialog_parent(),
         ).exec()
 
     def on_open_import_dialog(self) -> None:
         from . import pokemon_transfer as xfer
         path, _ = QFileDialog.getOpenFileName(
-            None, "포켓몬 / 스킬 불러오기", "",
+            self._dialog_parent(), "포켓몬 / 스킬 불러오기", "",
             f"Pokemon Buddy 파일 (*{xfer.POKEMON_EXT} *{xfer.SKILL_EXT});;"
             "모든 파일 (*)")
         if not path:
             return
         self.on_import_transfer_file(path)
+
+    def _dialog_parent(self):
+        """Parent for transfer confirm/file dialogs. The MainPanel is
+        always-on-top, so an unparented dialog would hide BEHIND it and feel
+        broken — parenting to the open panel keeps the dialog in front."""
+        mp = getattr(self, "_main_panel", None)
+        try:
+            if mp is not None and mp.isVisible():
+                return mp
+        except RuntimeError:
+            pass
+        return None
 
     def on_export_skill(self, item_key: str) -> None:
         """보내기 from a skill 교본 tile → save a .scroll file, consume one."""
@@ -964,18 +977,19 @@ class BuddyApp:
         item = find_item(item_key)
         if item is None:
             return
+        parent = self._dialog_parent()
         if self.store.get_item_count(item_key) <= 0:
-            QMessageBox.information(None, "보내기 불가", f"{item.label}이(가) 없습니다.")
+            QMessageBox.information(parent, "보내기 불가", f"{item.label}이(가) 없습니다.")
             return
         if QMessageBox.question(
-                None, "스킬 보내기",
+                parent, "스킬 보내기",
                 f"정말 {item.label}을(를) 보내시겠어요?\n"
                 f"보내면 가방에서 하나 사라집니다.") != QMessageBox.Yes:
             return
         sk = _sk.skill_for_item(item_key)
         default_name = xfer.suggested_skill_filename(sk.name if sk else item.label)
         path, _ = QFileDialog.getSaveFileName(
-            None, "스킬 파일 저장", default_name,
+            parent, "스킬 파일 저장", default_name,
             f"Pokemon Buddy 스킬 (*{xfer.SKILL_EXT})")
         if not path:
             return
@@ -985,13 +999,13 @@ class BuddyApp:
             xfer.export_skill(self.store, item_key, Path(path))
         except Exception as exc:  # noqa: BLE001
             log.exception("skill export failed")
-            QMessageBox.critical(None, "보내기 실패", f"오류:\n{exc}")
+            QMessageBox.critical(parent, "보내기 실패", f"오류:\n{exc}")
             return
         self.store.consume_item(item_key, 1)
         self._refresh_panels()
         QMessageBox.information(
-            None, "보내기 완료",
-            f"{item.label}을(를) 파일로 보냈습니다.\n\n저장 위치:\n{path}")
+            parent, "보내기 완료",
+            f"{item.label}을(를) 파일로 보냈습니다.")
 
     # ---- using special items ----
     def on_use_item(self, item_key: str) -> None:
