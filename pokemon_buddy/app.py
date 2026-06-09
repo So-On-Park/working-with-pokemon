@@ -216,12 +216,15 @@ class BuddyApp:
         self.encounters.caught.connect(self.on_wild_caught)
         self.encounters.fled.connect(self.on_wild_fled)
         self.encounters.needs_pokeball.connect(self.on_needs_pokeball)
+        self.encounters.spawned.connect(self._on_wild_spawned)
         self.encounters.start()
 
         self.item_drops = ItemDropManager(self.store, primary.window,
                                           parent=qt_app)
         self.item_drops.collected.connect(self.on_item_collected)
-        # 수집광 magnet: drops drift to the nearest party member that knows it.
+        self.item_drops.magnet_collected.connect(self.on_magnet_collected)
+        # 수집광 magnet: drops drift to the first party member (slot order)
+        # that knows it.
         self.item_drops.magnet_provider = self._collector_targets
         # Respect the user's "화면 아이템 표시" toggle (default on).
         self.item_drops.set_enabled(self._items_visible())
@@ -728,35 +731,80 @@ class BuddyApp:
         self.primary.window.say("몬스터볼이 없어! 🔴 모아야 해…", 2400)
 
     # ---- skills (수집광) ----
-    def _collector_targets(self):
-        """Centers of party members that know 수집광 — the magnet provider
-        the ItemDropManager pulls drops toward."""
+    def _collector_agents(self):
+        """Party members that know 수집광, in slot order (1 → 2 → 3)."""
         from . import skills
         out = []
         for agent in self.agents:
             try:
                 if (agent.buddy.has_skill(skills.SKILL_COLLECTOR)
                         and agent.window.isVisible()):
-                    out.append(agent.window.frameGeometry().center())
+                    out.append(agent)
             except RuntimeError:
                 pass
         return out
 
+    def _collector_targets(self):
+        """Window centers of 수집광 buddies (slot order) — the magnet provider
+        the ItemDropManager pulls drops toward (targets[0] = highest priority)."""
+        return [a.window.frameGeometry().center() for a in self._collector_agents()]
+
+    def on_magnet_collected(self, item_key: str, _point) -> None:
+        """A 수집광 buddy reeled in a drop. The collecting buddy (first in slot
+        order) speaks + reacts; the item lands in the bag."""
+        item = find_item(item_key)
+        if item is None:
+            return
+        self.store.add_item(item_key, 1)
+        collectors = self._collector_agents()
+        agent = collectors[0] if collectors else self.primary
+        agent.window.say(
+            f"{messages.pick_collector()} {item.emoji} {item.label}!", 2400)
+        agent.anim.play("happy")
+        self._refresh_main_inventory()
+        self._update_tray_status()
+
     def _maybe_autolearn_skill(self, agent: BuddyAgent) -> None:
-        """Bond mastery: a buddy at full friendship (100) auto-learns 수집광
-        the next time it levels up — no scroll required."""
+        """Auto-learn on level-up: 수집광 at full friendship (100), 명포수 at
+        level 100. No scroll required."""
         from . import skills
         b = agent.buddy
-        if b.friendship < 100:
-            return
-        if b.has_skill(skills.SKILL_COLLECTOR):
-            return
-        if self.store.learn_skill(b.bag_id, skills.SKILL_COLLECTOR):
+        learned: Optional[str] = None
+        if b.friendship >= 100 and not b.has_skill(skills.SKILL_COLLECTOR):
+            if self.store.learn_skill(b.bag_id, skills.SKILL_COLLECTOR):
+                learned = skills.SKILL_COLLECTOR
+        if b.level >= 100 and not b.has_skill(skills.SKILL_CATCHER):
+            if self.store.learn_skill(b.bag_id, skills.SKILL_CATCHER):
+                learned = skills.SKILL_CATCHER
+        if learned:
             agent.reload_buddy()
-            sk = skills.find(skills.SKILL_COLLECTOR)
-            QTimer.singleShot(2600, lambda: agent.window.say(
-                f"💞 깊은 유대로 「{sk.name}」을(를) 깨우쳤어!", 3200,
+            sk = skills.find(learned)
+            QTimer.singleShot(2600, lambda n=sk.name: agent.window.say(
+                f"💞 「{n}」을(를) 깨우쳤어!", 3200,
             ))
+
+    def _catcher_agents(self):
+        """Party members that know 명포수, in slot order."""
+        from . import skills
+        out = []
+        for agent in self.agents:
+            try:
+                if (agent.buddy.has_skill(skills.SKILL_CATCHER)
+                        and agent.window.isVisible()):
+                    out.append(agent)
+            except RuntimeError:
+                pass
+        return out
+
+    def _on_wild_spawned(self, _win) -> None:
+        """명포수 skill: if a party buddy knows it, auto-throw a ball after a
+        short beat (the buddy calls it out first)."""
+        catchers = self._catcher_agents()
+        if not catchers:
+            return
+        catchers[0].window.say(messages.pick_catcher(), 2400)
+        catchers[0].anim.play("happy")
+        QTimer.singleShot(1600, self.encounters.request_auto_catch)
 
     # ---- item display toggle (항목8) ----
     def _items_visible(self) -> bool:
@@ -817,8 +865,6 @@ class BuddyApp:
                 f"보내면 가방에서 사라지고 되돌릴 수 없습니다."
                 ) != QMessageBox.Yes:
             return
-        # The goodbye line shows in the send animation window (after 응).
-        farewell = messages.pick_farewell()
         adv = self.store.get_meta("adventurer_name") or "모험가"
         default_name = xfer.suggested_pokemon_filename(target, adv)
         path, _ = QFileDialog.getSaveFileName(
@@ -831,6 +877,14 @@ class BuddyApp:
         sprite_path = get_buddy_sprite_with_fallback(
             self.sprite_style, target.dex_id, target.is_rare)
         display_name = target.display_name
+        farewell = messages.pick_farewell()
+        # The goodbye line + ONE more confirm happen inside this window,
+        # before the buddy goes into the ball. We only write the file +
+        # remove the buddy if the user goes through with it.
+        dlg = SendRevealDialog(display_name=display_name, sprite_path=sprite_path,
+                               farewell=farewell, parent=None)
+        if dlg.exec() != SendRevealDialog.Accepted:
+            return
         try:
             xfer.export_pokemon(self.store, bag_id, Path(path),
                                 adventurer_name=adv)
@@ -843,8 +897,6 @@ class BuddyApp:
         self._ensure_valid_party()
         self._rebuild_agents()
         self._refresh_panels()
-        SendRevealDialog(display_name=display_name, sprite_path=sprite_path,
-                         save_path=path, farewell=farewell, parent=None).exec()
 
     def _ensure_valid_party(self) -> None:
         """Guarantee the active party references only existing bag rows and
@@ -871,6 +923,12 @@ class BuddyApp:
             QMessageBox.warning(None, "불러오기 실패",
                                 f"이 파일을 불러올 수 없습니다:\n{exc}")
             return
+        # A transfer file is single-use — once imported, delete it so the
+        # same pokemon/skill can't be duplicated by re-importing.
+        try:
+            Path(path).unlink()
+        except OSError:
+            log.debug("could not delete imported file: %s", path)
         if result.get("kind") == "skill":
             self._refresh_panels()
             self.primary.window.say(

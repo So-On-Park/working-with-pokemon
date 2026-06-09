@@ -91,6 +91,9 @@ ITEMS: List[ItemDef] = [
     ItemDef("skill.collector",       ItemKind.SKILL,   "📜", "수집광 교본",
             description="파티원에게 전수하는 기술 교본. 배운 포켓몬은 화면에 "
                         "떨어진 아이템을 끌어당겨 자동으로 주워와."),
+    ItemDef("skill.catcher",         ItemKind.SKILL,   "📜", "명포수 교본",
+            description="배운 포켓몬은 야생 포켓몬이 나타나면 자동으로 "
+                        "몬스터볼을 던져 잡아줘. (레벨 100이면 스스로 깨우침)"),
 ]
 
 ITEMS_BY_KEY: Dict[str, ItemDef] = {it.key: it for it in ITEMS}

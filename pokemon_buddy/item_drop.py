@@ -226,7 +226,8 @@ class ItemDropManager(QObject):
     an item up; the app routes that to `Store.add_item`."""
 
     spawned = Signal(object)        # ItemDropWindow
-    collected = Signal(str)         # item_key
+    collected = Signal(str)         # item_key (manual click → primary)
+    magnet_collected = Signal(str, object)  # item_key, target QPoint (수집광)
     skipped = Signal(str)
 
     def __init__(self, store: Store, buddy_widget: QWidget,
@@ -341,20 +342,17 @@ class ItemDropManager(QObject):
             targets = []
         if not targets:
             return
-        center = win.frameGeometry().center()
-
-        def _dist2(pt: QPoint) -> int:
-            dx = pt.x() - center.x()
-            dy = pt.y() - center.y()
-            return dx * dx + dy * dy
-
-        nearest = min(targets, key=_dist2)
-        win.magnet_to(nearest)
+        # Party-order priority: the provider returns 수집광 buddies in slot
+        # order (1 → 2 → 3), so the first one reels it in.
+        target = targets[0]
+        win._magnet_target = target
+        win.magnet_to(target)
 
     def _on_magnet_arrived(self, win: ItemDropWindow) -> None:
         key = win.item.key
+        target = getattr(win, "_magnet_target", None)
         self._cleanup(win)
-        self.collected.emit(key)
+        self.magnet_collected.emit(key, target)
 
     def _on_collected(self, win: ItemDropWindow) -> None:
         key = win.item.key

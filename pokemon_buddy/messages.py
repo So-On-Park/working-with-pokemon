@@ -783,6 +783,33 @@ def pick_farewell() -> str:
     return random.choice(FAREWELL)
 
 
+# A 수집광 buddy's line when it reels in a dropped item.
+COLLECTOR_LINES: List[str] = [
+    "내가 주워올게! 🧲",
+    "이건 내 거~ 슈웅!",
+    "주섬주섬… 또 하나 겟!",
+    "수집은 내 취미라구!",
+    "놓칠 줄 알고? 휙!",
+]
+
+
+def pick_collector() -> str:
+    return random.choice(COLLECTOR_LINES)
+
+
+# A 명포수(catcher) buddy's line when it auto-throws a ball at a wild.
+CATCHER_LINES: List[str] = [
+    "저 녀석, 내가 잡는다! 🎯",
+    "몬스터볼, 가랏!",
+    "도망 못 가게 해줄게!",
+    "이건 내 사냥감이야!",
+]
+
+
+def pick_catcher() -> str:
+    return random.choice(CATCHER_LINES)
+
+
 # Probability of drawing from the hidden bond-max pool when the buddy is
 # at friendship 100. Lower than 1.0 so regular AFFECTIONATE chatter still
 # appears occasionally — keeps variety.

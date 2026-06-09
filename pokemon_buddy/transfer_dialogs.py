@@ -20,9 +20,8 @@ from PySide6.QtCore import (
     QPropertyAnimation,
     Qt,
     QTimer,
-    QUrl,
 )
-from PySide6.QtGui import QDesktopServices, QFont
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QDialog,
     QGraphicsOpacityEffect,
@@ -114,12 +113,16 @@ class _RevealBase(QDialog):
         self._sprite = sp
         return sp
 
-    def _wobble_ball(self, cycles: int = 8) -> None:
+    def _wobble_ball(self, cycles: int = 3) -> None:
+        """까딱… 까딱… 까딱 — `cycles` slow side nudges, each returning to
+        center, so it reads as distinct wobbles rather than a fast jitter."""
         base = self.ball.pos()
         anim = QPropertyAnimation(self.ball, b"pos", self)
-        anim.setDuration(90)
-        anim.setStartValue(QPoint(base.x() - 7, base.y()))
-        anim.setEndValue(QPoint(base.x() + 7, base.y()))
+        anim.setDuration(340)  # per nudge — a touch slow on purpose
+        anim.setKeyValueAt(0.0, base)
+        anim.setKeyValueAt(0.30, QPoint(base.x() + 9, base.y()))
+        anim.setKeyValueAt(0.60, QPoint(base.x() - 9, base.y()))
+        anim.setKeyValueAt(1.0, base)
         anim.setEasingCurve(QEasingCurve.InOutSine)
         anim.setLoopCount(cycles)
         anim.finished.connect(lambda: self.ball.move(base))
@@ -169,17 +172,18 @@ class ReceiveRevealDialog(_RevealBase):
 
         self.headline.setText("두근두근… 새로운 포켓몬이다!")
         self.sub.setText("몬스터볼이 들썩이고 있어…")
-        QTimer.singleShot(200, lambda: self._wobble_ball(8))
-        QTimer.singleShot(1150, self._open_ball)
+        QTimer.singleShot(300, lambda: self._wobble_ball(3))
+        QTimer.singleShot(1400, self._open_ball)
 
     def _open_ball(self) -> None:
-        self._burst_at_ball()
         try:
             self.ball.setVisible(False)
         except RuntimeError:
             return
         sp = self._make_sprite(self._sprite_path)
         sp.show()
+        # 빵빠레 — fanfare burst as the buddy pops out.
+        self._burst_at_ball()
         rare = "✨ 레어 " if self._is_rare else ""
         self.headline.setText(f"따단! {rare}{self._display_name}이(가)\n나의 동료가 되었어!")
         note = "📖 도감에 새로 추가됐어!" if self._is_new_dex else f"({self._species_name})"
@@ -190,27 +194,46 @@ class ReceiveRevealDialog(_RevealBase):
 
 
 class SendRevealDialog(_RevealBase):
-    """Send confirmation reveal — the buddy is drawn into the ball, which
-    then shows where the file was saved."""
+    """Send flow: the buddy says its goodbye, the user confirms ONE more time,
+    then the buddy is drawn into the ball. exec() returns Accepted only if the
+    user goes through with it — the caller writes the file + removes the buddy
+    after that."""
 
     def __init__(self, *, display_name: str, sprite_path: Optional[Path],
-                 save_path: str, farewell: str = "",
+                 farewell: str = "",
                  parent: Optional[QWidget] = None) -> None:
         super().__init__("포켓몬 보내기", parent)
         self._display_name = display_name
-        self._save_path = save_path
+        self._suck_anim: Optional[QPropertyAnimation] = None
 
-        # Start with the buddy visible on top of the (hidden) ball. The
-        # goodbye line (the buddy's own voice — casual) lives here, not in the
-        # earlier confirm dialog.
+        # Buddy visible on top of the (hidden) ball; it speaks its goodbye —
+        # just the line itself (no "이름: ..." prefix).
         self.ball.setVisible(False)
         sp = self._make_sprite(sprite_path)
         sp.show()
-        self.headline.setText(f'{display_name}: "{farewell}"' if farewell
-                              else f"{display_name}을(를) 포켓볼에 넣는 중…")
+        self.headline.setText(farewell or f"{display_name}을(를) 보냅니다")
+        self.sub.setText("정말 보낼까요?")
+
+        # One more yes/no before the ball closes. action_btn's default accept
+        # wiring is repurposed to "confirm send" first.
+        try:
+            self.action_btn.clicked.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+        self.action_btn.setText("보낼게요")
+        self.action_btn.setVisible(True)
+        self.action_btn.setDefault(True)
+        self.action_btn.clicked.connect(self._confirm_send)
+        self.extra_btn.setText("아니요")
+        self.extra_btn.setVisible(True)
+        self.extra_btn.clicked.connect(self.reject)
+
+    def _confirm_send(self) -> None:
+        # User said yes → hide buttons, run the 슈슉 animation.
+        self.action_btn.setVisible(False)
+        self.extra_btn.setVisible(False)
         self.sub.setText("포켓볼에 넣는 중…")
-        self._suck_anim: Optional[QPropertyAnimation] = None
-        QTimer.singleShot(700, self._suck_in)
+        self._suck_in()
 
     def _suck_in(self) -> None:
         """슈슉 — fade the buddy into the ball, then close the ball."""
@@ -222,7 +245,7 @@ class SendRevealDialog(_RevealBase):
             eff = QGraphicsOpacityEffect(sp)
             sp.setGraphicsEffect(eff)
             anim = QPropertyAnimation(eff, b"opacity", self)
-            anim.setDuration(380)
+            anim.setDuration(420)
             anim.setStartValue(1.0)
             anim.setEndValue(0.0)
             anim.setEasingCurve(QEasingCurve.InCubic)
@@ -242,14 +265,12 @@ class SendRevealDialog(_RevealBase):
             return
         self._burst_at_ball()
         self.headline.setText(f"{self._display_name}이(가)\n포켓볼에 잘 들어갔습니다!")
-        self.sub.setText(f"저장 위치:\n{self._save_path}")
+        self.sub.setText("")
+        try:
+            self.action_btn.clicked.disconnect()
+        except (RuntimeError, TypeError):
+            pass
         self.action_btn.setText("확인")
         self.action_btn.setVisible(True)
         self.action_btn.setDefault(True)
-        self.extra_btn.setText("폴더 열기")
-        self.extra_btn.setVisible(True)
-        self.extra_btn.clicked.connect(self._open_folder)
-
-    def _open_folder(self) -> None:
-        folder = str(Path(self._save_path).parent)
-        QDesktopServices.openUrl(QUrl.fromLocalFile(folder))
+        self.action_btn.clicked.connect(self.accept)

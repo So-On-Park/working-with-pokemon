@@ -25,3 +25,19 @@ def test_drop_size_small_for_food_toy_ball():
     for kind in (ItemKind.SPECIAL, ItemKind.SKILL):
         assert drop_size_for(kind) == ITEM_DROP_SIZE_PX
     assert ITEM_DROP_SIZE_SMALL_PX < ITEM_DROP_SIZE_PX
+
+
+def test_collector_and_catcher_lines_nonempty():
+    assert messages.pick_collector() in messages.COLLECTOR_LINES
+    assert messages.pick_catcher() in messages.CATCHER_LINES
+    assert messages.COLLECTOR_LINES and messages.CATCHER_LINES
+
+
+def test_catcher_skill_registered():
+    from pokemon_buddy import skills
+    sk = skills.find(skills.SKILL_CATCHER)
+    assert sk is not None and sk.name == "명포수"
+    # learnable/sendable via its teaching scroll
+    assert skills.skill_for_item("skill.catcher") is sk
+    from pokemon_buddy.items import find as find_item
+    assert find_item("skill.catcher") is not None
