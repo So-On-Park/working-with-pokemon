@@ -34,6 +34,7 @@ from .config import (
     ITEM_DROP_MAX_ACTIVE,
     ITEM_DROP_PROBABILITY,
     ITEM_DROP_SIZE_PX,
+    ITEM_DROP_SIZE_SMALL_PX,
     MAGNETIZE_DELAY_MS,
     MAGNETIZE_TRAVEL_MS,
     SKILL_DROP_AUTO_FADE_MS,
@@ -53,6 +54,14 @@ from .state import Store
 from .windows_state import is_screen_locked
 
 log = logging.getLogger(__name__)
+
+
+def drop_size_for(kind: ItemKind) -> int:
+    """On-screen drop size by kind. Food / toy / pokeball are small; special
+    + skill keep the larger icon so their game-art reads clearly."""
+    if kind in (ItemKind.FOOD, ItemKind.TOY, ItemKind.POKEBALL):
+        return ITEM_DROP_SIZE_SMALL_PX
+    return ITEM_DROP_SIZE_PX
 
 
 def _pick_random_item() -> ItemDef:
@@ -90,17 +99,18 @@ class ItemDropWindow(QWidget):
 
         self.item = item
         self._resolved = False
-        self.setFixedSize(ITEM_DROP_SIZE_PX, ITEM_DROP_SIZE_PX)
+        size = drop_size_for(item.kind)
+        self.setFixedSize(size, size)
 
         label = QLabel(self)
         label.setAlignment(Qt.AlignCenter)
-        label.setGeometry(0, 0, ITEM_DROP_SIZE_PX, ITEM_DROP_SIZE_PX)
+        label.setGeometry(0, 0, size, size)
         label.setStyleSheet("background: transparent;")
         # Three visual paths: pokeballs use the painted icon, items with a
         # PokeAPI slug load their sprite, everything else uses emoji.
         icon_pm = None
         if item.kind == ItemKind.POKEBALL:
-            icon_pm = make_pokeball_pixmap(ITEM_DROP_SIZE_PX - 4)
+            icon_pm = make_pokeball_pixmap(size - 4)
         elif item.slug:
             sprite_path = get_item_sprite(item.slug)
             if sprite_path is not None:
@@ -108,7 +118,7 @@ class ItemDropWindow(QWidget):
                 pm = QPixmap(str(sprite_path))
                 if not pm.isNull():
                     icon_pm = pm.scaled(
-                        ITEM_DROP_SIZE_PX - 4, ITEM_DROP_SIZE_PX - 4,
+                        size - 4, size - 4,
                         Qt.KeepAspectRatio, Qt.SmoothTransformation,
                     )
         if icon_pm is not None:
@@ -116,7 +126,7 @@ class ItemDropWindow(QWidget):
         else:
             label.setText(item.emoji)
             font = QFont()
-            font.setPointSize(22)
+            font.setPointSize(max(14, int(size * 0.5)))
             label.setFont(font)
         # Let clicks fall through the label to the window — we handle them in
         # the window's mousePressEvent so the whole 44×44 area is the target.

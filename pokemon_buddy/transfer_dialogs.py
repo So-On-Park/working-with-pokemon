@@ -25,6 +25,7 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QDesktopServices, QFont
 from PySide6.QtWidgets import (
     QDialog,
+    QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -36,9 +37,9 @@ from .animated_sprite import AnimatedSprite
 from .pokeball import make_pokeball_pixmap
 from .star_burst import StarBurst
 
-STAGE_PX = 150
-BALL_PX = 110
-SPRITE_PX = 132
+STAGE_PX = 92
+BALL_PX = 62
+SPRITE_PX = 80   # ~base display size — imported buddy shouldn't look huge
 
 
 class _RevealBase(QDialog):
@@ -49,7 +50,8 @@ class _RevealBase(QDialog):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.setWindowFlag(Qt.WindowStaysOnTopHint, True)
-        self.setMinimumSize(360, 340)
+        self.setMinimumSize(300, 250)
+        self.resize(300, 250)
         self._burst: Optional[StarBurst] = None
         self._anim: Optional[QPropertyAnimation] = None
 
@@ -203,7 +205,28 @@ class SendRevealDialog(_RevealBase):
         sp.show()
         self.headline.setText(f"{display_name}을(를) 포켓볼에 넣는 중…")
         self.sub.setText("")
-        QTimer.singleShot(900, self._draw_into_ball)
+        self._suck_anim: Optional[QPropertyAnimation] = None
+        QTimer.singleShot(700, self._suck_in)
+
+    def _suck_in(self) -> None:
+        """슈슉 — fade the buddy into the ball, then close the ball."""
+        sp = self._sprite
+        if sp is None:
+            self._draw_into_ball()
+            return
+        try:
+            eff = QGraphicsOpacityEffect(sp)
+            sp.setGraphicsEffect(eff)
+            anim = QPropertyAnimation(eff, b"opacity", self)
+            anim.setDuration(380)
+            anim.setStartValue(1.0)
+            anim.setEndValue(0.0)
+            anim.setEasingCurve(QEasingCurve.InCubic)
+            anim.finished.connect(self._draw_into_ball)
+            anim.start()
+            self._suck_anim = anim
+        except RuntimeError:
+            self._draw_into_ball()
 
     def _draw_into_ball(self) -> None:
         try:

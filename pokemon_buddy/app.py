@@ -811,10 +811,17 @@ class BuddyApp:
                 None, "보내기 불가",
                 "마지막 한 마리는 보낼 수 없어. 곁에 최소 한 마리는 있어야 해!")
             return
+        # The buddy says a random goodbye, then asks for confirmation.
+        farewell = messages.pick_farewell()
+        for a in self.agents:
+            if a.buddy.bag_id == bag_id and a.window.isVisible():
+                a.window.say(farewell, 2600)
+                break
         if QMessageBox.question(
                 None, "포켓몬 보내기",
-                f"정말 {target.display_name}을(를) 보내시겠습니까?\n"
-                f"보내면 내 가방에서 사라지고 되돌릴 수 없어.") != QMessageBox.Yes:
+                f"{target.display_name}: \"{farewell}\"\n\n"
+                f"정말 날 보낼 거야?\n(보내면 가방에서 사라지고 되돌릴 수 없어)"
+                ) != QMessageBox.Yes:
             return
         adv = self.store.get_meta("adventurer_name") or "모험가"
         default_name = xfer.suggested_pokemon_filename(target, adv)

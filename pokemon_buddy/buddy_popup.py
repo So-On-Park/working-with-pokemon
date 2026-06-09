@@ -52,7 +52,7 @@ class BuddyMenuPopup(QWidget):
     action = Signal(str)
 
     POPUP_W = 240
-    POPUP_H = 178
+    POPUP_H = 200
 
     # Two rows of four — actions on top, navigation on bottom.
     ACTION_ROW: List[Tuple[str, str, str]] = [
@@ -112,23 +112,18 @@ class BuddyMenuPopup(QWidget):
         header_row = QHBoxLayout()
         header_row.setSpacing(6)
 
+        # Name wraps instead of clipping; long names use a smaller font so the
+        # whole thing stays readable (no cut-off glyphs).
         name_label = QLabel(buddy.display_name)
+        name_label.setWordWrap(True)
+        nlen = len(buddy.display_name)
+        name_pt = 12 if nlen <= 7 else (11 if nlen <= 11 else 10)
         name_font = QFont()
         name_font.setBold(True)
-        name_font.setPointSize(12)
+        name_font.setPointSize(name_pt)
         name_label.setFont(name_font)
         name_label.setStyleSheet("color: #222;")
-        header_row.addWidget(name_label)
-
-        if buddy.nickname or buddy.is_rare:
-            species_color = "#c47b1c" if buddy.is_rare else "#888"
-            species_label = QLabel(buddy.species_label)
-            species_label.setStyleSheet(
-                f"color: {species_color}; font-size: 9pt;"
-            )
-            header_row.addWidget(species_label)
-
-        header_row.addStretch(1)
+        header_row.addWidget(name_label, stretch=1)
 
         lvl_label = QLabel(f"Lv. {buddy.level}")
         lvl_font = QFont()
@@ -139,8 +134,19 @@ class BuddyMenuPopup(QWidget):
             "color: white; background: #4a7ddc;"
             "border-radius: 8px; padding: 1px 8px;"
         )
-        header_row.addWidget(lvl_label)
+        # Top-align so the pill stays put when the name wraps to two lines.
+        header_row.addWidget(lvl_label, alignment=Qt.AlignTop)
         root.addLayout(header_row)
+
+        # Species on its own line (muted) when there's a nickname or it's rare.
+        if buddy.nickname or buddy.is_rare:
+            species_color = "#c47b1c" if buddy.is_rare else "#888"
+            species_label = QLabel(buddy.species_label)
+            species_label.setWordWrap(True)
+            species_label.setStyleSheet(
+                f"color: {species_color}; font-size: 9pt;"
+            )
+            root.addWidget(species_label)
 
         # Friendship — hearts + value. The hidden XP accumulator and the
         # personality are NOT shown here — those live in the bag detail

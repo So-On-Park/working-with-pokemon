@@ -765,6 +765,24 @@ def pick(bank: Dict[Tier, List[str]], friendship: int) -> str:
     return random.choice(bank[tier_for(friendship)])
 
 
+# A line the buddy says right before being sent away (보내기 confirm).
+FAREWELL: List[str] = [
+    "그동안 즐거웠어… 새 친구한테도 잘 보일게!",
+    "엥? 나… 어디 가는 거야?",
+    "새로운 모험이라니, 살짝 설레는걸?",
+    "잘 지내! 가끔 내 생각도 해줘.",
+    "고마웠어. 너랑 보낸 시간 잊지 않을게.",
+    "정든 자리를 떠나려니 조금 아쉽다…",
+    "또 만날 수 있겠지? 그때까지 안녕!",
+    "새 친구도 나만큼 아껴줄까…?",
+]
+
+
+def pick_farewell() -> str:
+    """A random goodbye line for the 보내기 (send) confirmation."""
+    return random.choice(FAREWELL)
+
+
 # Probability of drawing from the hidden bond-max pool when the buddy is
 # at friendship 100. Lower than 1.0 so regular AFFECTIONATE chatter still
 # appears occasionally — keeps variety.
