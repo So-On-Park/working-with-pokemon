@@ -29,7 +29,7 @@ import zipfile
 from pathlib import Path
 from typing import Optional
 
-from .config import ASSETS_DIR, DATA_DIR, ROOT
+from .config import ASSETS_DIR, CUSTOM_SPRITES_DIR, DATA_DIR, ROOT
 
 log = logging.getLogger(__name__)
 
@@ -60,6 +60,13 @@ def _iter_backup_files() -> list[tuple[Path, str]]:
         for p in DATA_DIR.iterdir():
             if p.is_file():
                 pairs.append((p, f"data/{p.name}"))
+
+    # Custom-pokemon sprites now live under data/custom_sprites/ (update-safe
+    # user dir). iterdir() above doesn't recurse, so add them explicitly.
+    if CUSTOM_SPRITES_DIR.exists():
+        for p in CUSTOM_SPRITES_DIR.iterdir():
+            if p.is_file():
+                pairs.append((p, f"data/custom_sprites/{p.name}"))
 
     if ASSETS_DIR.exists():
         for name in _ALWAYS_INCLUDE_ASSETS:

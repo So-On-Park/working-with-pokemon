@@ -35,9 +35,15 @@ class ReminderScheduler(QObject):
 
     # ---- lifecycle ----
     def start(self) -> None:
+        # Rebaseline every reminder's clock to "now" on launch. Interval
+        # reminders are recurring timers, not a backlog: if the PC was off
+        # all night, the user doesn't want every reminder dumped at once the
+        # moment they open the app (출근 직후 한꺼번에 발사되던 버그). Starting
+        # the app starts the timers fresh — each fires one interval later.
+        now = time.time()
+        for r in self.store.list_reminders():
+            self.store.mark_reminder_fired(r.id, now)
         self._timer.start(self.CHECK_INTERVAL_MS)
-        # Run an initial check shortly after startup so users see activity quickly.
-        QTimer.singleShot(2000, self._tick)
 
     def stop(self) -> None:
         self._timer.stop()

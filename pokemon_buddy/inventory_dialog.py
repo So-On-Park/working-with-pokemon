@@ -15,6 +15,7 @@ from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
+    QHBoxLayout,
     QLabel,
     QPushButton,
     QScrollArea,
@@ -22,6 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .info_icon import InfoIcon
 from .items import ItemDef, ItemKind, items_of
 from .pokeball import make_pokeball_pixmap
 from .sprites import get_item_sprite
@@ -33,7 +35,11 @@ KIND_LABELS = {
     ItemKind.TOY:      ("🎾 장난감",      "놀아주기에 사용"),
     ItemKind.POKEBALL: ("🔴 몬스터볼",    "야생 포켓몬 포획에 사용"),
     ItemKind.SPECIAL:  ("✨ 특수 아이템", "사용 버튼으로 활성화"),
+    ItemKind.SKILL:    ("📜 기술 교본",   "전수 버튼으로 기술 전수"),
 }
+
+# Item kinds that get an action button on their tile (사용/전수).
+_ACTION_KINDS = {ItemKind.SPECIAL, ItemKind.SKILL}
 
 # Heights vary by section so the SPECIAL tiles can fit a "사용" button.
 TILE_W = 82
@@ -80,11 +86,11 @@ class _ItemTile(QFrame):
         super().__init__(parent)
         self.item = item
         owned = count > 0
-        height = TILE_H_SPECIAL if item.kind == ItemKind.SPECIAL else TILE_H_PLAIN
+        height = TILE_H_SPECIAL if item.kind in _ACTION_KINDS else TILE_H_PLAIN
         self.setFixedSize(TILE_W, height)
         self.setFrameShape(QFrame.StyledPanel)
 
-        if item.kind == ItemKind.SPECIAL and owned:
+        if item.kind in _ACTION_KINDS and owned:
             border = "#a380e8"
             bg = "#f6f2ff"
         else:
@@ -131,9 +137,9 @@ class _ItemTile(QFrame):
         )
         col.addWidget(count_row)
 
-        # Use button — SPECIAL items only.
-        if item.kind == ItemKind.SPECIAL:
-            btn = QPushButton("사용")
+        # Action button — SPECIAL (사용) and SKILL (전수) tiles.
+        if item.kind in _ACTION_KINDS:
+            btn = QPushButton("전수" if item.kind == ItemKind.SKILL else "사용")
             btn.setEnabled(owned)
             btn.setFixedHeight(18)
             btn.setStyleSheet(
@@ -147,6 +153,15 @@ class _ItemTile(QFrame):
             )
             btn.clicked.connect(lambda: self.use_clicked.emit(self.item.key))
             col.addWidget(btn)
+
+        # Per-item explanation: hover anywhere on the tile, or click the
+        # corner ⓘ, to read what the item does — keeps the tile uncluttered.
+        if item.description:
+            self.setToolTip(item.description)
+            info = InfoIcon(item.description, self)
+            info.resize(16, 16)
+            info.move(TILE_W - 17, 2)
+            info.raise_()
 
 
 class InventoryPanel(QWidget):
@@ -186,7 +201,8 @@ class InventoryPanel(QWidget):
             f"음식 {totals[ItemKind.FOOD]}  ·  "
             f"장난감 {totals[ItemKind.TOY]}  ·  "
             f"몬스터볼 {totals[ItemKind.POKEBALL]}  ·  "
-            f"특수 {totals[ItemKind.SPECIAL]}"
+            f"특수 {totals[ItemKind.SPECIAL]}  ·  "
+            f"교본 {totals[ItemKind.SKILL]}"
         )
 
         inner = QWidget()
@@ -195,13 +211,21 @@ class InventoryPanel(QWidget):
         inner_layout.setContentsMargins(2, 2, 2, 2)
 
         for kind in [ItemKind.FOOD, ItemKind.TOY,
-                     ItemKind.POKEBALL, ItemKind.SPECIAL]:
+                     ItemKind.POKEBALL, ItemKind.SPECIAL, ItemKind.SKILL]:
             title, hint = KIND_LABELS[kind]
-            head = QLabel(f"{title}   <span style='color:#888'>{hint}</span>")
-            head.setTextFormat(Qt.RichText)
+            # Title + a small ⓘ (hover/click → the section hint) instead of a
+            # long inline explanation, so the header stays clean.
+            head_w = QWidget()
+            head_row = QHBoxLayout(head_w)
+            head_row.setContentsMargins(0, 0, 0, 0)
+            head_row.setSpacing(5)
+            head = QLabel(title)
             head_font = QFont(); head_font.setBold(True); head_font.setPointSize(10)
             head.setFont(head_font)
-            inner_layout.addWidget(head)
+            head_row.addWidget(head)
+            head_row.addWidget(InfoIcon(hint))
+            head_row.addStretch(1)
+            inner_layout.addWidget(head_w)
 
             grid = QGridLayout()
             grid.setSpacing(4)
@@ -209,7 +233,7 @@ class InventoryPanel(QWidget):
             for i, item in enumerate(items_of(kind)):
                 count = self.store.get_item_count(item.key)
                 tile = _ItemTile(item, count)
-                if kind == ItemKind.SPECIAL:
+                if kind in _ACTION_KINDS:
                     tile.use_clicked.connect(self.use_item_requested)
                 grid.addWidget(tile, i // 4, i % 4)
             inner_layout.addLayout(grid)

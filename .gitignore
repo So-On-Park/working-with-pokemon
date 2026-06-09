@@ -12,6 +12,7 @@ env/
 # --- Packaging / build ---
 build/
 dist/
+installer_out/
 *.egg-info/
 *.egg
 
@@ -68,10 +69,19 @@ assets/*
 !assets/.gitkeep
 
 # User-registered custom pokemon ARE tracked — they're authored content
-# that should ship with the repo. PokeAPI downloads (4-digit dex_ids
+# that should ship with the repo. At runtime they're copied into data/ (the
+# update-safe user dir) by config.migrate_user_data(); the assets/ copies
+# stay as the shipped read-only seed. PokeAPI downloads (4-digit dex_ids
 # 0001-1999) stay ignored above by the broad `assets/*` rule.
 !assets/custom_pokemon.json
 !assets/9[0-9][0-9][0-9]_*.gif
 
+# App / tray icon (메타몽 #0132) — a build input, tracked despite assets/*.
+!assets/icon.ico
+
 # Extracted release folders
 PokemonBuddy-*-win64/
+
+# Local archive — backups, recordings, old releases moved out of the way.
+# Personal / large / regenerable; never tracked.
+_archive/

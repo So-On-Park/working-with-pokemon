@@ -65,7 +65,8 @@ CREATE TABLE IF NOT EXISTS bag (
     caught_with TEXT NOT NULL DEFAULT 'pokeball.basic',
     personality TEXT NOT NULL DEFAULT 'playful',
     last_interaction_at REAL NOT NULL DEFAULT 0,
-    caught_at REAL NOT NULL
+    caught_at REAL NOT NULL,
+    skills TEXT NOT NULL DEFAULT '[]'
 );
 
 CREATE TABLE IF NOT EXISTS inventory (
@@ -181,10 +182,23 @@ class Buddy:
     nickname_history: str        # JSON list of {nickname, set_at} entries
     last_interaction_at: float
     caught_at: float
+    skills: str = "[]"           # JSON list of learned skill keys (e.g. ["collector"])
 
     @property
     def exp_to_next(self) -> int:
         return self.level * 100
+
+    @property
+    def learned_skills(self) -> List[str]:
+        import json as _json
+        try:
+            data = _json.loads(self.skills or "[]")
+            return [str(s) for s in data] if isinstance(data, list) else []
+        except ValueError:
+            return []
+
+    def has_skill(self, skill_key: str) -> bool:
+        return skill_key in self.learned_skills
 
     @property
     def species_label(self) -> str:
@@ -243,6 +257,7 @@ class Store:
         self._migrate_add_nickname_history()
         self._migrate_reset_legacy_default_friendship()
         self._migrate_add_alarm_label_message()
+        self._migrate_add_bag_skills()
         self._ensure_active_buddy()
         self._ensure_default_reminders()
         self._ensure_starter_items()
@@ -424,6 +439,19 @@ class Store:
                 (label, key),
             )
         self.set_meta("daily_events_v2_migrated", "1")
+        self.conn.commit()
+
+    def _migrate_add_bag_skills(self) -> None:
+        """bag: add `skills` (JSON list of learned skill keys) so individuals
+        can learn 수집광 and future techniques. Idempotent."""
+        if self.get_meta("bag_skills_migrated") == "1":
+            return
+        cols = self._table_columns("bag")
+        if "skills" not in cols:
+            self.conn.execute(
+                "ALTER TABLE bag ADD COLUMN skills TEXT NOT NULL DEFAULT '[]'"
+            )
+        self.set_meta("bag_skills_migrated", "1")
         self.conn.commit()
 
     def _migrate_reset_legacy_default_friendship(self) -> None:
@@ -667,6 +695,7 @@ class Store:
             nickname_history=row["nickname_history"] or "[]",
             last_interaction_at=row["last_interaction_at"],
             caught_at=row["caught_at"],
+            skills=(row["skills"] if "skills" in row.keys() else "[]") or "[]",
         )
 
     def load_active_buddy(self) -> Buddy:
@@ -699,6 +728,32 @@ class Store:
              b.friendship, b.friendship_xp, b.last_interaction_at, b.bag_id),
         )
         self.conn.commit()
+
+    def learn_skill(self, bag_id: int, skill_key: str) -> bool:
+        """Teach a skill to a specific bag individual. Returns True if it was
+        newly learned, False if it already knew it (or the row is gone)."""
+        import json as _json
+        row = self.conn.execute(
+            "SELECT skills FROM bag WHERE id=?", (bag_id,)
+        ).fetchone()
+        if row is None:
+            return False
+        try:
+            current = _json.loads((row["skills"] if "skills" in row.keys()
+                                   else "[]") or "[]")
+            if not isinstance(current, list):
+                current = []
+        except ValueError:
+            current = []
+        if skill_key in current:
+            return False
+        current.append(skill_key)
+        self.conn.execute(
+            "UPDATE bag SET skills=? WHERE id=?",
+            (_json.dumps(current, ensure_ascii=False), bag_id),
+        )
+        self.conn.commit()
+        return True
 
     def swap_active_buddy(self, bag_id: int) -> None:
         # Caller guarantees bag_id exists. Also keeps the party JSON in

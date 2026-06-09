@@ -3,7 +3,7 @@
 > 어릴 때 몬스터볼 하나 품고 다니던 마음, 이제 데스크탑에 살짝 꺼내놓기. ✨
 
 ![Windows](https://img.shields.io/badge/Windows-10%2F11-2563eb?style=for-the-badge&logo=windows)
-![Release](https://img.shields.io/badge/Release-v0.1.1-f97316?style=for-the-badge)
+![Release](https://img.shields.io/badge/Release-v1.2.1-f97316?style=for-the-badge)
 ![Pokemon](https://img.shields.io/badge/Desktop-Buddy-22c55e?style=for-the-badge)
 
 Pokemon Buddy는 Windows 데스크탑 위에 포켓몬 친구들을 살짝 데려오는 작은 companion app이야. 🖥️
@@ -14,6 +14,7 @@ Pokemon Buddy는 Windows 데스크탑 위에 포켓몬 친구들을 살짝 데�
 
 <p align="center">
   <b>처음 켜면 모험자 이름을 정하고, 네 개의 포켓볼 중 하나를 고르게 돼. 🎒</b><br>
+  포켓볼을 누르면 실루엣이 먼저 보이고, "이 포켓몬으로 할까?" 확인하면 결정!<br>
   이상해씨? 파이리? 꼬부기? 피카츄? 열어보기 전까지는 아무도 모른다구.
 </p>
 
@@ -32,9 +33,13 @@ Pokemon Buddy는 Windows 데스크탑 위에 포켓몬 친구들을 살짝 데�
 
 가장 최신 버전은 여기서 받으면 돼.
 
-[Pokemon Buddy v0.1.1 다운로드](https://github.com/So-On-Park/working-with-pokemon/releases/tag/v0.1.1)
+[Pokemon Buddy 최신 릴리스 다운로드](https://github.com/So-On-Park/working-with-pokemon/releases/latest)
 
-압축 풀고 `PokemonBuddy.exe` 딱 실행하면 끝. 설치 과정 없이 바로 모험 시작이야.
+- **설치 파일** (`PokemonBuddy-Setup-X.Y.Z.exe`) — 권장. 실행하면 설치되고 "프로그램 추가/제거"에 등록돼. 시작 메뉴·바탕화면 바로가기, (선택) 부팅 자동 실행까지 한 번에.
+- **압축본** (`...win64.zip`) — 압축만 풀어 `PokemonBuddy.exe`를 바로 실행하는 포터블 방식.
+
+> 업데이트는 새 설치 파일을 실행하면 끝이야 — 키우던 포켓몬은 그대로 유지돼.
+> 자세한 건 **[업데이트 / 설치 가이드 (UPDATING.md)](UPDATING.md)** 를, 버전별 변경 사항은 **[업데이트 내역 (CHANGELOG.md)](CHANGELOG.md)** 를 봐줘.
 
 ---
 
@@ -76,6 +81,17 @@ Pokemon Buddy는 Windows 데스크탑 위에 포켓몬 친구들을 살짝 데�
 파티원이 여러 마리라면 “이건 누구한테 줄까?” 하고 직접 골라줄 수 있어.
 
   
+### 📜 두루마리에서 배우는 특별한 기술
+
+아주 가끔 화면에 두루마리(스킬 교본)가 툭 떨어져.  
+
+주워서 파티원에게 전수하면 기술을 배우고, **‘수집광’** 을 익힌 친구는
+
+화면에 떨어진 아이템을 스르륵 끌어당겨 자동으로 주워와.  
+
+친밀도가 100까지 쌓인 단짝은 레벨업하면서 스스로 기술을 깨우치기도 해.
+
+
 ### 📖 내 손으로 채우는 도감
 
 만난 포켓몬과 잡은 포켓몬은 도감에서 확인할 수 있어.  
@@ -121,21 +137,33 @@ PC를 옮기거나, 초기화하기 전 상태를 보관하고 싶을 때 백업
 - 🖥️ 데스크탑 위에서 같이 지내는 포켓몬 파티
 - 💛 친밀도, 경험치, 레벨업, 진화까지 이어지는 성장
 - 🌿 야생 포켓몬 발견, 포획, 도감 등록
-- 🎁 아이템을 줍고 원하는 포켓몬에게 사용
+- 🎁 아이템을 줍고 원하는 포켓몬에게 사용 (화면 표시 on/off 토글)
+- 📜 두루마리로 배우는 스킬 — ‘수집광’으로 아이템 자동 수집
 - 🎨 직접 만든 GIF로 커스텀 포켓몬 등록
 - 🔔 원하는 주기로 설정하는 리마인드 알림
 - 💾 내 포켓몬 상태 백업과 복원
+- 🪟 설치 파일 배포 — 업데이트해도 진행도 그대로 유지
 
 ---
 
 ## 🚀 시작하기
 
-1. 다운로드
-2. 압축 풀기
-3. `PokemonBuddy.exe` 실행
-4. 모험자 이름 입력
-5. 포켓볼 선택
-6. 첫 버디 등장
+1. 다운로드 (설치 파일 권장, 압축본도 가능)
+2. 설치 파일 실행 — 또는 압축본은 압축 풀고 `PokemonBuddy.exe` 실행
+3. 모험자 이름 입력
+4. 포켓볼 선택 → 실루엣 보고 "이 포켓몬으로 할까?" 확인
+5. 첫 버디 등장!
+
+> 업데이트·데이터 이전 방법은 **[UPDATING.md](UPDATING.md)** 참고.
+
+---
+
+## 🗒️ 업데이트 내역
+
+최근 버전 요약 (전체는 **[CHANGELOG.md](CHANGELOG.md)**):
+
+- **v1.2.1** — 첫 포켓몬 선택 개선(볼별 고정 + 실루엣), 설치 중 실행 앱 자동 종료, 실행 아이콘 정리
+- **v1.2.0** — 📜 스킬(수집광) 시스템, 화면 아이템 표시 토글, ⓘ 설명 아이콘, 표시 배율 3배, 설치 파일 배포 + 업데이트 시 진행도 유지, 여러 버그 수정
 
 ---
 
@@ -148,3 +176,19 @@ Pokemon Buddy는 거창한 게임이라기보다, 매일 켜두는 작은 동료
 생산성 앱인 척하지만 사실은 책상 위 작은 모험.
 
 켜두는 순간, 괜히 컴퓨터를 한 번 더 켜고 싶어질걸?
+
+---
+
+## 📜 저작권 · 크레딧
+
+Pokemon Buddy는 **비영리 팬 메이드 프로젝트**예요.
+
+**Pokémon**, 포켓몬 이름, 모든 포켓몬 스프라이트의 저작권·상표권은
+**Nintendo / Game Freak / Creatures Inc. / The Pokémon Company** 에 있고,
+이 프로젝트는 위 회사들과 **제휴·후원·승인 관계가 없어요.**
+
+스프라이트는 [PokéAPI/sprites](https://github.com/PokeAPI/sprites)(CC0, 이미지 저작권은 The Pokémon Company)와
+[Pokémon Showdown / Smogon](https://play.pokemonshowdown.com/sprites/)(출처 표기 조건)에서 받아서 써요.
+커스텀 포켓몬 GIF는 사용자가 직접 만든 창작물이고요.
+
+자세한 출처와 고지는 **[CREDITS.md](CREDITS.md)** 를 봐줘.

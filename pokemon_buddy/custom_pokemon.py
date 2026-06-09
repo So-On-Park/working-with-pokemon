@@ -24,11 +24,14 @@ import threading
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from .config import ASSETS_DIR
+from .config import CUSTOM_SPRITES_DIR, DATA_DIR
 
 log = logging.getLogger(__name__)
 
-REGISTRY_PATH = ASSETS_DIR / "custom_pokemon.json"
+# Registry + custom sprites live under data/ (user state) so a distribution
+# update that overwrites assets/ keeps the user's creations — see
+# config.migrate_user_data().
+REGISTRY_PATH = DATA_DIR / "custom_pokemon.json"
 # Start well past the PokeAPI dex space (currently ~1025 + variants) so
 # synthetic IDs never collide with a real species ID.
 FIRST_CUSTOM_DEX_ID = 9001
@@ -132,22 +135,22 @@ def get_display_scale(dex_id: int) -> float:
 
 
 def _sprite_dest(dex_id: int, style: str) -> Path:
-    return ASSETS_DIR / f"{dex_id:04d}_{style}.gif"
+    return CUSTOM_SPRITES_DIR / f"{dex_id:04d}_{style}.gif"
 
 
 def _refuse_prod_assets_under_pytest() -> None:
     """If pytest is running but a fixture forgot to patch this module's
-    ASSETS_DIR, we'd silently corrupt the user's real sprite cache (we
+    sprite dir, we'd silently corrupt the user's real sprite cache (we
     actually did, once — 1×1 stub GIFs overwrote senmon/ssony/huni). Fail
     loudly instead."""
     import os
     if not os.environ.get("PYTEST_CURRENT_TEST"):
         return
-    real_root = Path(__file__).resolve().parent.parent / "assets"
-    if ASSETS_DIR.resolve() == real_root.resolve():
+    real_root = Path(__file__).resolve().parent.parent / "data" / "custom_sprites"
+    if CUSTOM_SPRITES_DIR.resolve() == real_root.resolve():
         raise RuntimeError(
             "custom_pokemon.add() under pytest is targeting the real "
-            f"assets dir ({ASSETS_DIR}). A fixture forgot to "
+            f"sprite dir ({CUSTOM_SPRITES_DIR}). A fixture forgot to "
             "monkeypatch ASSETS_DIR in pokemon_buddy.custom_pokemon."
         )
 

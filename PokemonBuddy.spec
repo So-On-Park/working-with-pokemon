@@ -57,5 +57,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    # icon='assets/icon.ico',  # uncomment if/when an .ico is added
+    icon='assets/icon.ico',  # 메타몽(#0132) 트레이/실행 아이콘
 )

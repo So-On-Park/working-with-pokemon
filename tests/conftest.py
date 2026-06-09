@@ -54,12 +54,20 @@ def temp_assets(tmp_path, monkeypatch):
     import pokemon_buddy.pokemon_info as pi
 
     monkeypatch.setattr(cfg, "ASSETS_DIR", assets)
-    # `from .config import ASSETS_DIR` captured a binding at import time —
-    # patch the per-module copies too so sprite copies / lookups land in
-    # the temp dir, not the user's real assets folder.
-    monkeypatch.setattr(cp, "ASSETS_DIR", assets)
+    monkeypatch.setattr(cfg, "DATA_DIR", assets)
+    monkeypatch.setattr(cfg, "CUSTOM_SPRITES_DIR", assets)
+    monkeypatch.setattr(cfg, "BUNDLED_ASSETS_DIR", assets)
+    # `from .config import ...` captured bindings at import time — patch the
+    # per-module copies too so registries / sprite copies / lookups land in
+    # the temp dir, not the user's real folders. Custom sprites + registries
+    # now live under data/ (see config.migrate_user_data); we point them all
+    # at the single temp dir so the existing path assertions still hold.
+    monkeypatch.setattr(cp, "CUSTOM_SPRITES_DIR", assets)
+    monkeypatch.setattr(cp, "DATA_DIR", assets)
     import pokemon_buddy.sprites as sp
     monkeypatch.setattr(sp, "ASSETS_DIR", assets)
+    monkeypatch.setattr(sp, "CUSTOM_SPRITES_DIR", assets)
+    monkeypatch.setattr(sp, "BUNDLED_ASSETS_DIR", assets)
     monkeypatch.setattr(cp, "REGISTRY_PATH", assets / "custom_pokemon.json")
     monkeypatch.setattr(ds, "REGISTRY_PATH", assets / "display_scale.json")
     monkeypatch.setattr(pn, "NAMES_CACHE_PATH", assets / "names_ko.json")

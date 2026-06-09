@@ -153,9 +153,8 @@ class BuddyAgent(QObject):
                 self.sprite_style, self.buddy.dex_id, self.buddy.is_rare,
             )
         )
-        self.window.sprite.set_scale_override(
-            display_scale.get(self.buddy.dex_id)
-        )
+        # Resizes the window too so high scales (up to 3×) aren't clipped.
+        self.window.set_display_scale(display_scale.get(self.buddy.dex_id))
 
     # ---- public API used by BuddyApp ----
     def reload_buddy(self) -> None:
