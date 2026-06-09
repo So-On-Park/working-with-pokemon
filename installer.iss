@@ -24,7 +24,7 @@
 ; want to move a save between machines, use the in-app 백업하기 / 백업 불러오기.
 
 #define MyAppName "Pokemon Buddy"
-#define MyAppVersion "1.2.1"
+#define MyAppVersion "1.3.0"
 #define MyAppPublisher "So-On-Park"
 #define MyAppExeName "PokemonBuddy.exe"
 
