@@ -191,9 +191,10 @@ def build_species_file(dest: Path, *, dex_id: int,
     return {"name": name_ko, "path": str(dest)}
 
 
-def export_skill(store: Store, item_key: str, dest: Path) -> dict:
-    """Write a skill teaching-scroll to a `.scroll` file. Caller removes one
-    scroll from inventory after a confirmed write."""
+def build_skill_file(dest: Path, item_key: str) -> dict:
+    """Write a skill teaching-scroll `.scroll` file. No store needed — a scroll
+    carries only the skill identity. Used by export_skill (보내기) and to
+    pre-generate the shipped `scrolls/` library."""
     skill = skills_mod.skill_for_item(item_key)
     item = find_item(item_key)
     if skill is None or item is None:
@@ -205,8 +206,15 @@ def export_skill(store: Store, item_key: str, dest: Path) -> dict:
                   "name": skill.name, "description": skill.description},
     }
     _write_container(Path(dest), manifest)
-    log.info("exported skill %s -> %s", item_key, dest)
     return {"name": skill.name, "path": str(dest)}
+
+
+def export_skill(store: Store, item_key: str, dest: Path) -> dict:
+    """Write a skill teaching-scroll to a `.scroll` file. Caller removes one
+    scroll from inventory after a confirmed write."""
+    result = build_skill_file(Path(dest), item_key)
+    log.info("exported skill %s -> %s", item_key, dest)
+    return result
 
 
 # --------------------------------------------------------------- reading -----

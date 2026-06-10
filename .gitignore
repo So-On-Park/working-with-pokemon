@@ -90,10 +90,12 @@ assets/*
 # Extracted release folders
 PokemonBuddy-*-win64/
 
-# Transfer files exported/tested at the repo root — personal, not tracked.
-# (The shipped species library under pokeballs/ IS tracked.)
-/*.pokeball
-/*.scroll
+# Transfer files — pokemon (.pokeball) and skill (.scroll). Not tracked
+# anywhere: the species library under pokeballs/ and the skill scrolls under
+# scrolls/ are regenerated from sources (tools/gen_species_pokeballs.py,
+# tools/gen_skill_scrolls.py) and bundled into the installer at build time.
+*.pokeball
+*.scroll
 
 # Local archive — backups, recordings, old releases moved out of the way.
 # Personal / large / regenerable; never tracked.

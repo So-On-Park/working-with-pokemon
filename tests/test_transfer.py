@@ -82,6 +82,19 @@ def test_skill_file_round_trip(store, temp_assets, tmp_path):
     assert store.get_item_count("skill.collector") == before + 1
 
 
+def test_build_skill_file_no_store(store, temp_assets, tmp_path):
+    # build_skill_file needs no store; every catalogued skill round-trips.
+    for key, sk in skills.SKILLS.items():
+        dest = tmp_path / (xfer.suggested_skill_filename(sk.name))
+        xfer.build_skill_file(dest, sk.item_key)
+        assert dest.exists()
+        manifest = xfer.inspect(dest)
+        assert manifest["kind"] == "skill"
+        assert manifest["skill"]["key"] == key
+        result = xfer.import_file(store, dest)
+        assert result["kind"] == "skill"
+
+
 def test_inspect_rejects_non_transfer(tmp_path):
     import zipfile
     p = tmp_path / "bogus.pokeball"
