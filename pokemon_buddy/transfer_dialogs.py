@@ -4,9 +4,9 @@ ReceiveRevealDialog — plays when a `.pokeball` is imported:
     "두근두근… 새로운 포켓몬이다!" → pokéball wobbles → bursts open →
     "따단! ○○○이(가) 나의 동료가 되었어!" (+ dex-added note).
 
-SendRevealDialog — plays after a confirmed 보내기:
-    the buddy is drawn in, the ball closes with a sparkle →
-    "○○○이 포켓볼에 잘 들어갔습니다" + the saved file path.
+SendRevealDialog — the 보내기 confirm + send-off in one window:
+    the buddy says its goodbye → the user confirms ("보낼게요/아니요") →
+    the buddy is drawn into the ball with a sparkle. (No file path shown.)
 """
 
 from __future__ import annotations

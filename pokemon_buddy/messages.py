@@ -478,112 +478,6 @@ BOND_MAX_LINES: Dict[Personality, List[str]] = {
 }
 
 
-# ---- wall-clock scheduled greetings (출근 / 점심 / 퇴근) ----
-#
-# Fired once per local workday by `daily_schedule.py` when the user is
-# actually online past the configured hour. Personality-flavored — a
-# 장난꾸러기's morning hello is very different from a 차분한's.
-
-MORNING_ARRIVAL: Dict[Personality, List[str]] = {
-    Personality.PLAYFUL: [
-        "왔다왔다~ ☆ 오늘은 뭐 할 거야?",
-        "히히 ✨ 출근 도장 찍었네!",
-        "에헴! 오늘도 같이 노닥거리자~",
-    ],
-    Personality.CALM: [
-        "좋은 아침이야. 차분히 시작해보자.",
-        "오늘도 천천히, 너의 페이스로.",
-        "어서와. 조용한 하루이길.",
-    ],
-    Personality.BRAVE: [
-        "와하하! 오늘도 출근이다! 💪",
-        "준비됐다! 어떤 일이든 같이 가자!",
-        "후훗 — 오늘은 또 어떤 도전이 기다리려나!",
-    ],
-    Personality.SHY: [
-        "...좋은 아침... 이에요.",
-        "안녕... 오늘도 잘 부탁해.",
-        "...왔구나. 다행이야.",
-    ],
-    Personality.NAIVE: [
-        "어! 어어! 왔다왔다! 헤헤 ☆",
-        "헤헤 안녕~ 오늘도 같이!",
-        "오! 좋은 아침 좋은 아침!",
-    ],
-    Personality.SMART: [
-        "출근 확인. 오늘도 효율을 챙겨봐.",
-        "음, 정시군. 좋은 시작이야.",
-        "후훗 ✨ 오늘의 일정도 잘 부탁해.",
-    ],
-}
-
-LUNCH: Dict[Personality, List[str]] = {
-    Personality.PLAYFUL: [
-        "점심시간이다아아 ☆ 뭐 먹을래?",
-        "히히 ✨ 배고프지 않아? 가자가자!",
-        "ㅋㅋ 시간 됐어 점심 점심!",
-    ],
-    Personality.CALM: [
-        "12시야. 천천히 식사하자.",
-        "점심시간이네. 잘 챙겨먹어.",
-        "...밥 먹을 시간이야.",
-    ],
-    Personality.BRAVE: [
-        "점심이다! 든든하게 먹고 와! 🍱",
-        "와하하 충전 시간이야! 잘 먹고 와!",
-        "에너지 보충 타임! 가자!",
-    ],
-    Personality.SHY: [
-        "...점심시간이에요. 꼭 챙겨먹어요.",
-        "...밥 거르지 말고... 응?",
-        "점심... 같이 먹는 것 같은 기분으로...",
-    ],
-    Personality.NAIVE: [
-        "냠냠 시간이다! 헤헤 ☆ 맛있는 거 먹어!",
-        "와아 점심! 점심! 가자!",
-        "뭐 먹을 거야? 응? 응?",
-    ],
-    Personality.SMART: [
-        "12시 정각. 식사를 권장해.",
-        "효율을 위해서는 점심도 중요해. 가봐.",
-        "흠흠, 식사 시간이군. 챙겨먹어.",
-    ],
-}
-
-EVENING_FAREWELL: Dict[Personality, List[str]] = {
-    Personality.PLAYFUL: [
-        "퇴근이다아아 ☆ 오늘도 수고했어!",
-        "히히 ✨ 내일 봐~ 잘 가!",
-        "ㅋㅋㅋ 끝났네 끝났어! 잘 쉬어!",
-    ],
-    Personality.CALM: [
-        "오늘 하루 수고했어. 푹 쉬어.",
-        "퇴근 시간이네. 천천히 정리하자.",
-        "...수고했어. 내일 또 봐.",
-    ],
-    Personality.BRAVE: [
-        "오늘도 잘 싸웠다! 💪 내일도 화이팅!",
-        "와하하 퇴근이다! 잘 쉬고 내일 보자!",
-        "오늘 하루도 훌륭했어. 푹 쉬어!",
-    ],
-    Personality.SHY: [
-        "...수고했어요. 푹 쉬세요.",
-        "...오늘도 고마웠어. 잘 가...",
-        "...내일도, 와줘.",
-    ],
-    Personality.NAIVE: [
-        "끝났어! 끝났어! 헤헤 잘 가~",
-        "내일 또 보자! 응? 응? ☆",
-        "와아 퇴근! 잘 자!",
-    ],
-    Personality.SMART: [
-        "근무 종료. 충분한 휴식을 권장해.",
-        "후훗 ✨ 오늘의 일과 완료. 잘 쉬어.",
-        "퇴근 확인. 내일도 효율적으로.",
-    ],
-}
-
-
 # ---- absence buckets (welcome-back) ----
 #
 # `pick_welcome_back(personality, absence_hours)` returns a line graded
@@ -717,18 +611,6 @@ WELCOME_BACK: Dict[Personality, Dict[AbsenceBucket, List[str]]] = {
         ],
     },
 }
-
-
-def pick_morning(personality: Personality) -> str:
-    return random.choice(MORNING_ARRIVAL[personality])
-
-
-def pick_lunch(personality: Personality) -> str:
-    return random.choice(LUNCH[personality])
-
-
-def pick_farewell(personality: Personality) -> str:
-    return random.choice(EVENING_FAREWELL[personality])
 
 
 def pick_welcome_back(personality: Personality,

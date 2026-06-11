@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .config import COUNT_CAP
 from .info_icon import InfoIcon
 from .items import ItemDef, ItemKind, items_of
 from .pokeball import make_pokeball_pixmap
@@ -56,7 +57,6 @@ TILE_W = 82
 TILE_H_PLAIN = 84
 TILE_H_SPECIAL = 104
 ICON_PX = 36
-COUNT_CAP = 999   # displayed counts never exceed this
 _GRID_COLS = 4    # tiles per row (all sections share this for alignment)
 
 
@@ -144,7 +144,7 @@ class _ItemTile(QFrame):
         label.setWordWrap(True)
         col.addWidget(label)
 
-        count_row = QLabel(f"×{count}" if owned else "—")
+        count_row = QLabel(f"×{min(count, COUNT_CAP)}" if owned else "—")
         count_row.setAlignment(Qt.AlignCenter)
         count_row.setStyleSheet(
             f"font-size: 8pt; color: {'#4a7ddc' if owned else '#bbb'};"

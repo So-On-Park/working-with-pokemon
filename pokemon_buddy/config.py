@@ -172,10 +172,11 @@ BULK_DEX_RANGE = (1, 151)
 #
 # Internally there's a hidden `friendship_xp` accumulator per buddy. Each
 # action grants XP; once `FRIENDSHIP_XP_PER_POINT` accumulates, the visible
-# friendship integer goes up by 1. The values below are tuned so a moderate
-# daily user (≈ 5 each of feed/play/train + 1 daily greeting) hits 100
-# around the two-month mark; a heavy user gets there faster, a light user
-# slower.
+# friendship integer goes up by 1. Calibrated so that simply KEEPING the
+# buddy on screen caps friendship at 100 in ~2 weeks (≈100 hrs of screen
+# time — see the passive section below); active feed/play/train + the daily
+# greeting stack on top to get there faster. Friendship never decreases —
+# there is no decay (see Store.apply_friendship_decay, a no-op).
 FRIENDSHIP_DEFAULT = 0
 FRIENDSHIP_XP_PER_POINT = 100
 FRIENDSHIP_FEED = 8            # XP — was 1 friendship
@@ -185,8 +186,6 @@ FRIENDSHIP_PET = 4             # left-click pet
 FRIENDSHIP_CATCH_WILD = 8
 FRIENDSHIP_LEVEL_UP = 12
 FRIENDSHIP_DAILY_GREETING = 15
-FRIENDSHIP_DECAY_PER_DAY = 1
-FRIENDSHIP_DECAY_AFTER_HOURS = 48
 FRIENDSHIP_BONUS_MID = 60   # >= 60: 1.2x EXP
 FRIENDSHIP_BONUS_HIGH = 80  # >= 80: 1.5x EXP
 
@@ -225,15 +224,25 @@ ABSENCE_LONG_HOURS = 168    # "한참 만이야!"
 # Tick — periodic refresh of the status / passive gains.
 TICK_MS = 30_000
 
-# Passive XP + friendship gains while the buddy is open on the user's
-# screen. Small, slow, but visible — designed so spending a workday
-# 'together' inches the values forward without dominating the active-
-# action gain budget.
-PASSIVE_INTERVAL_S = 15 * 60   # every 15 minutes of unlocked screen time
-PASSIVE_EXP = 1                # +1 EXP toward the next level
-PASSIVE_FRIENDSHIP_XP = 1      # +1 friendship XP (100 XP = +1 friendship)
+# Level — flat curve. Every level needs the same EXP (EXP_PER_LEVEL), so
+# progress is steady and predictable instead of the old level×100 ramp.
+# MAX_LEVEL is the cap (the 명포수 skill auto-learns here).
+MAX_LEVEL = 100
+EXP_PER_LEVEL = 200
 
-# Action rewards. Feed gives only friendship; play/train give EXP + friendship.
+# Passive XP + friendship gains while the buddy is open on the user's screen.
+# This is the BACKBONE of progression: just keeping the buddy with you caps
+# BOTH stats in ~100 hours of on-screen time — roughly two weeks of a normal
+# workday. Active feed/play/train + the daily greeting stack on top to reach
+# the cap sooner.
+#   friendship: 25 XP × 4 ticks/hr = 100 XP/hr = +1 친밀도/hr  → ~100 hr to 100
+#   level:      50 EXP × 4 ticks/hr = 200 EXP/hr = +1 레벨/hr   → ~100 hr to Lv.100
+PASSIVE_INTERVAL_S = 15 * 60   # every 15 minutes of unlocked screen time
+PASSIVE_EXP = 50
+PASSIVE_FRIENDSHIP_XP = 25
+
+# Action rewards — all stack on top of passive screen-time gains.
+FEED_EXP = 10                  # feeding now grants EXP too (+친밀도 below)
 PLAY_EXP = 15
 TRAIN_EXP = 35
 
@@ -253,6 +262,10 @@ CATCH_EXP_REWARD = 20
 # "레어" prefix and the dex tracks it as a separate entry.
 RARE_PROBABILITY = 0.01
 RARE_NAME_PREFIX = "레어"
+
+# Inventory — a single item key never stockpiles past this many. Enforced at
+# the storage layer (Store.add_item clamps) AND in the bag UI display.
+COUNT_CAP = 999
 
 # Item drops — fruits / toys / pokeballs appear on screen for the user to
 # collect into their bag (inventory). Items are completely static once

@@ -18,6 +18,7 @@ from PySide6.QtCore import QObject, Signal
 from .animations import AnimationEngine
 from .chatter import ChatterEngine
 from .config import (
+    FEED_EXP,
     FRIENDSHIP_FEED,
     FRIENDSHIP_LEVEL_UP,
     FRIENDSHIP_PET,
@@ -190,11 +191,18 @@ class BuddyAgent(QObject):
             self.window.say("먹을 게 없네… 🍎 모아야 해!", 2400)
             return
         item = find_item(food_key)
-        self.store.bump_friendship(self.buddy, FRIENDSHIP_FEED)
+        leveled = self.store.gain_exp(self.buddy, FEED_EXP)
+        self.store.bump_friendship(
+            self.buddy,
+            FRIENDSHIP_FEED + (FRIENDSHIP_LEVEL_UP if leveled else 0),
+        )
         self.buddy = self.store.get_bag_entry(self.buddy.bag_id) or self.buddy
-        emoji = item.emoji if item else "🍎"
-        self.window.say(f"{emoji} {messages.pick_food_line(food_key)}", 2400)
-        self.anim.play("eat")
+        if leveled:
+            self._after_level_up()
+        else:
+            emoji = item.emoji if item else "🍎"
+            self.window.say(f"{emoji} {messages.pick_food_line(food_key)}", 2400)
+            self.anim.play("eat")
         self._update_status()
 
     def on_play(self) -> None:

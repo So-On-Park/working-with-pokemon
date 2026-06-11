@@ -80,12 +80,56 @@ def test_record_catch_creates_dex_entry(store):
 
 
 def test_gain_exp_levels_up(store):
+    from pokemon_buddy.config import EXP_PER_LEVEL
     b = store.add_to_bag(1)
-    # Level 1 needs 100 EXP to level
-    leveled = store.gain_exp(b, 100)
+    # Flat curve: every level needs EXP_PER_LEVEL.
+    leveled = store.gain_exp(b, EXP_PER_LEVEL)
     assert leveled is True
     refreshed = store.get_bag_entry(b.bag_id)
     assert refreshed.level == 2
+
+
+def test_exp_to_next_is_flat(store):
+    from pokemon_buddy.config import EXP_PER_LEVEL
+    b = store.add_to_bag(1)
+    assert b.exp_to_next == EXP_PER_LEVEL
+    store.gain_exp(b, EXP_PER_LEVEL * 5)   # jump several levels
+    b = store.get_bag_entry(b.bag_id)
+    assert b.level == 6
+    assert b.exp_to_next == EXP_PER_LEVEL  # same at any level
+
+
+def test_gain_exp_caps_at_max_level(store):
+    from pokemon_buddy.config import EXP_PER_LEVEL, MAX_LEVEL
+    b = store.add_to_bag(1)
+    # Dump way more than enough to overshoot the cap.
+    store.gain_exp(b, EXP_PER_LEVEL * (MAX_LEVEL + 50))
+    b = store.get_bag_entry(b.bag_id)
+    assert b.level == MAX_LEVEL
+    assert b.exp == b.exp_to_next          # bar pinned full, no overflow
+    # Further gains stay capped.
+    store.gain_exp(b, EXP_PER_LEVEL * 10)
+    b = store.get_bag_entry(b.bag_id)
+    assert b.level == MAX_LEVEL
+
+
+def test_add_item_clamps_at_count_cap(store):
+    from pokemon_buddy.config import COUNT_CAP
+    # A huge add is clamped to the cap (robust to any seeded baseline).
+    store.add_item("food.apple", COUNT_CAP + 500)
+    assert store.get_item_count("food.apple") == COUNT_CAP
+    # Further adds never push past the cap.
+    store.add_item("food.apple", 1000)
+    assert store.get_item_count("food.apple") == COUNT_CAP
+
+
+def test_feed_grants_exp(store):
+    from pokemon_buddy.config import FEED_EXP
+    assert FEED_EXP > 0                     # feeding is no longer EXP-free
+    b = store.add_to_bag(1)
+    before = b.exp
+    store.gain_exp(b, FEED_EXP)
+    assert store.get_bag_entry(b.bag_id).exp == before + FEED_EXP
 
 
 def test_friendship_xp_accumulates_to_points(store):

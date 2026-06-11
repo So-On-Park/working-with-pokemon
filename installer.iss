@@ -24,7 +24,7 @@
 ; want to move a save between machines, use the in-app 백업하기 / 백업 불러오기.
 
 #define MyAppName "Pokemon Buddy"
-#define MyAppVersion "1.3.0"
+#define MyAppVersion "1.3.1"
 #define MyAppPublisher "So-On-Park"
 #define MyAppExeName "PokemonBuddy.exe"
 
@@ -76,8 +76,10 @@ Source: "dist\PokemonBuddy.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; fallback; it never writes here. "skipifsourcedoesntexist" keeps the build
 ; working even if assets\ is trimmed before packaging.
 Source: "assets\*"; DestDir: "{app}\assets"; Flags: recursesubdirs ignoreversion skipifsourcedoesntexist
-; Shipped library of species-only .pokeball files (import → fresh catch).
-Source: "pokeballs\*"; DestDir: "{app}\pokeballs"; Flags: recursesubdirs ignoreversion skipifsourcedoesntexist
+; NOTE: the .pokeball / .scroll transfer libraries (pokeballs\, scrolls\) are
+; intentionally NOT shipped — they're the distributor's personal collection.
+; The file associations below still let any user import a .pokeball/.scroll
+; they receive; we just don't bundle a starter library.
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

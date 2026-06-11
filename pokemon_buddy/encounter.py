@@ -50,6 +50,7 @@ class EncounterManager(QObject):
         self.buddy_widget = buddy_widget
         self._active: Optional[WildPokemonWindow] = None
         self._ball: Optional[Pokeball] = None
+        self._ball_used: Optional[str] = None   # item key of the ball thrown
         self._burst: Optional[StarBurst] = None
         # Set true when this catch attempt is using a pre-armed master ball
         # — bypasses the regular catch_rate roll for a guaranteed success.
@@ -159,6 +160,7 @@ class EncounterManager(QObject):
         if self.store.get_meta("master_ball_pending") == "1":
             self.store.set_meta("master_ball_pending", "0")
             self._master_ball_active = True
+            self._ball_used = "special.master-ball"
         else:
             self._master_ball_active = False
             ball_key = self.store.first_available_of_kind("pokeball")
@@ -168,6 +170,7 @@ class EncounterManager(QObject):
                 target.allow_retry()
                 self.needs_pokeball.emit()
                 return
+            self._ball_used = ball_key
 
         start = self.buddy_widget.frameGeometry().center()
         end = target.frameGeometry().center()
@@ -221,8 +224,7 @@ class EncounterManager(QObject):
 
     def _on_catch_success(self, target: WildPokemonWindow) -> None:
         dex_id, name, is_rare = target.dex_id, target.name, target.is_rare
-        ball_key = ("special.master-ball" if self._master_ball_active
-                    else "pokeball.basic")
+        ball_key = self._ball_used or "pokeball.basic"
         self._cleanup()
         self.caught.emit(dex_id, name, is_rare, ball_key)
 
@@ -260,6 +262,7 @@ class EncounterManager(QObject):
             self._ball.hide()
             self._ball.deleteLater()
             self._ball = None
+        self._ball_used = None
         if self._active is not None:
             self._active.hide()
             self._active.deleteLater()

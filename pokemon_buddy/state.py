@@ -188,7 +188,8 @@ class Buddy:
 
     @property
     def exp_to_next(self) -> int:
-        return self.level * 100
+        from .config import EXP_PER_LEVEL
+        return EXP_PER_LEVEL
 
     @property
     def learned_skills(self) -> List[str]:
@@ -1006,7 +1007,8 @@ class Store:
         return b
 
     def gain_exp(self, b: Buddy, amount: int) -> bool:
-        from .config import FRIENDSHIP_BONUS_HIGH, FRIENDSHIP_BONUS_MID
+        from .config import (FRIENDSHIP_BONUS_HIGH, FRIENDSHIP_BONUS_MID,
+                             MAX_LEVEL)
         multiplier = 1.0
         if b.friendship >= FRIENDSHIP_BONUS_HIGH:
             multiplier = 1.5
@@ -1015,10 +1017,14 @@ class Store:
         gained = int(round(amount * multiplier))
         b.exp += gained
         leveled = False
-        while b.exp >= b.exp_to_next:
+        while b.level < MAX_LEVEL and b.exp >= b.exp_to_next:
             b.exp -= b.exp_to_next
             b.level += 1
             leveled = True
+        if b.level >= MAX_LEVEL:
+            # Cap reached — pin the bar full and stop banking overflow EXP.
+            b.level = MAX_LEVEL
+            b.exp = b.exp_to_next
         self.save_active_buddy(b)
         return leveled
 
@@ -1306,11 +1312,13 @@ class Store:
         return int(row["count"]) if row else 0
 
     def add_item(self, key: str, n: int = 1) -> int:
-        """Add n of an item; returns the new total."""
+        """Add n of an item (clamped to COUNT_CAP); returns the new total."""
+        from .config import COUNT_CAP
         self.conn.execute(
-            "INSERT INTO inventory(item_key, count) VALUES(?, ?) "
-            "ON CONFLICT(item_key) DO UPDATE SET count = count + excluded.count",
-            (key, n),
+            "INSERT INTO inventory(item_key, count) VALUES(?, MIN(?, ?)) "
+            "ON CONFLICT(item_key) DO UPDATE SET "
+            "count = MIN(?, count + excluded.count)",
+            (key, COUNT_CAP, n, COUNT_CAP),
         )
         self.conn.commit()
         return self.get_item_count(key)

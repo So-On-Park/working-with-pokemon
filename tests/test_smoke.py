@@ -19,8 +19,6 @@ MODULES = [
     "pokemon_buddy.config",
     "pokemon_buddy.custom_pokemon",
     "pokemon_buddy.custom_pokemon_dialog",
-    "pokemon_buddy.daily_schedule",
-    "pokemon_buddy.daily_schedule_dialog",
     "pokemon_buddy.dex_dialog",
     "pokemon_buddy.display_scale",
     "pokemon_buddy.encounter",
@@ -67,3 +65,21 @@ def test_key_public_symbols_present():
     assert callable(main)
     assert callable(add)
     assert callable(set_scale)
+
+
+def test_version_is_single_source_of_truth():
+    """pokemon_buddy.__version__ is what the UI shows (tray menu header,
+    tooltip, HelpDialog title); installer.iss must carry the same number or
+    the installed app and Add/Remove Programs disagree about the version."""
+    import re
+    from pathlib import Path
+
+    import pokemon_buddy
+
+    assert re.fullmatch(r"\d+\.\d+\.\d+", pokemon_buddy.__version__)
+
+    iss = Path(__file__).resolve().parents[1] / "installer.iss"
+    m = re.search(r'#define MyAppVersion "([^"]+)"',
+                  iss.read_text(encoding="utf-8"))
+    assert m is not None, "MyAppVersion not found in installer.iss"
+    assert m.group(1) == pokemon_buddy.__version__

@@ -407,8 +407,17 @@ class BuddyApp:
         return self.store.get_meta("developer_mode") == "1"
 
     def _build_tray_menu(self) -> None:
+        from . import __version__
+
         menu = QMenu()
         dev = self._is_developer_mode()
+
+        # Non-clickable header so the installed version is always one
+        # right-click away (mirrors the HelpDialog title).
+        ver_act = QAction(f"Pokemon Buddy v{__version__}", menu)
+        ver_act.setEnabled(False)
+        menu.addAction(ver_act)
+        menu.addSeparator()
 
         feed = QAction("밥 주기", menu)
         feed.triggered.connect(self.on_feed)
@@ -765,23 +774,28 @@ class BuddyApp:
         self._update_tray_status()
 
     def _maybe_autolearn_skill(self, agent: BuddyAgent) -> None:
-        """Auto-learn on level-up: 수집광 at full friendship (100), 명포수 at
-        level 100. No scroll required."""
+        """Bond/level mastery: 수집광 at full friendship (100), 명포수 at level
+        100. No scroll required. Called both on level-up AND on every tick —
+        the tick path matters because a buddy that hits the level cap (100)
+        stops emitting level-ups, so a LATER friendship-100 would otherwise
+        never trigger the collector learn (both stats now cap in ~2 weeks)."""
         from . import skills
         b = agent.buddy
-        learned: Optional[str] = None
+        learned: list[str] = []
         if b.friendship >= 100 and not b.has_skill(skills.SKILL_COLLECTOR):
             if self.store.learn_skill(b.bag_id, skills.SKILL_COLLECTOR):
-                learned = skills.SKILL_COLLECTOR
+                learned.append(skills.SKILL_COLLECTOR)
         if b.level >= 100 and not b.has_skill(skills.SKILL_CATCHER):
             if self.store.learn_skill(b.bag_id, skills.SKILL_CATCHER):
-                learned = skills.SKILL_CATCHER
+                learned.append(skills.SKILL_CATCHER)
         if learned:
             agent.reload_buddy()
-            sk = skills.find(learned)
-            QTimer.singleShot(2600, lambda n=sk.name: agent.window.say(
-                f"💞 「{n}」을(를) 깨우쳤어!", 3200,
-            ))
+            for i, key in enumerate(learned):
+                sk = skills.find(key)
+                # Stagger announcements so two-at-once don't overlap.
+                QTimer.singleShot(2600 + i * 3400,
+                                  lambda n=sk.name: agent.window.say(
+                                      f"💞 「{n}」을(를) 깨우쳤어!", 3200))
 
     def _catcher_agents(self):
         """Party members that know 명포수, in slot order."""
@@ -860,12 +874,8 @@ class BuddyApp:
                 parent, "보내기 불가",
                 "마지막 한 마리는 보낼 수 없습니다. 곁에 최소 한 마리는 있어야 해요.")
             return
-        if QMessageBox.question(
-                parent, "포켓몬 보내기",
-                f"정말 {target.display_name}을(를) 보내시겠어요?\n"
-                f"보내면 가방에서 사라지고 되돌릴 수 없습니다."
-                ) != QMessageBox.Yes:
-            return
+        # Single confirmation happens inside SendRevealDialog ("보낼게요/아니요")
+        # right before the suck-in — matching the design's one-confirm flow.
         adv = self.store.get_meta("adventurer_name") or "모험가"
         default_name = xfer.suggested_pokemon_filename(target, adv)
         path, _ = QFileDialog.getSaveFileName(
@@ -917,11 +927,14 @@ class BuddyApp:
         """Import a .pokeball / .scroll file, then play the reveal."""
         from . import pokemon_transfer as xfer
         from .transfer_dialogs import ReceiveRevealDialog
+        # On a cold-start double-click there's no MainPanel yet; fall back to
+        # the always-on-top pet window so the dialog isn't lost behind it.
+        parent = self._dialog_parent() or self._pet_dialog_parent()
         try:
             result = xfer.import_file(self.store, Path(path))
         except Exception as exc:  # noqa: BLE001
             log.exception("import failed")
-            QMessageBox.warning(self._dialog_parent(), "불러오기 실패",
+            QMessageBox.warning(parent, "불러오기 실패",
                                 f"이 파일을 불러올 수 없습니다:\n{exc}")
             return
         # A transfer file is single-use — once imported, delete it so the
@@ -945,7 +958,7 @@ class BuddyApp:
             display_name=result["display_name"],
             species_name=result["species_name"],
             sprite_path=sprite_path, is_new_dex=result["is_new_dex"],
-            is_rare=result["is_rare"], parent=self._dialog_parent(),
+            is_rare=result["is_rare"], parent=parent,
         ).exec()
 
     def on_open_import_dialog(self) -> None:
@@ -966,6 +979,18 @@ class BuddyApp:
         try:
             if mp is not None and mp.isVisible():
                 return mp
+        except RuntimeError:
+            pass
+        return None
+
+    def _pet_dialog_parent(self):
+        """Fallback dialog parent when no MainPanel is open (e.g. a cold-start
+        double-click import). The pet window is always-on-top, so parenting to
+        it keeps a dialog/warning from getting buried behind the buddy."""
+        primary = getattr(self, "primary", None)
+        try:
+            if primary is not None and primary.window is not None:
+                return primary.window
         except RuntimeError:
             pass
         return None
@@ -1590,17 +1615,15 @@ class BuddyApp:
         display = f"레어 {name}" if is_rare else name
         self.primary.window.say(f"{display}이(가) 도망갔네…", 2200)
 
-    def _on_scheduled_event(self, text: str) -> None:
-        """Wall-clock greeting (출근 / 점심 / 퇴근) from the primary buddy."""
-        self.primary.window.say(text, 4500)
-        self.primary.anim.play("happy")
-
     # ---- background tick ----
     def _on_tick(self) -> None:
         if is_screen_locked():
             return
         for agent in self.agents:
             agent.apply_passive_gain()
+            # Catch bond-mastery (수집광 @ friendship 100) even when the buddy
+            # is already level-capped and no longer emits level-up events.
+            self._maybe_autolearn_skill(agent)
         self._update_tray_status()
 
     def _reassert_topmost(self) -> None:
@@ -1617,9 +1640,12 @@ class BuddyApp:
 
     # ---- tray helpers ----
     def _update_tray_status(self) -> None:
+        from . import __version__
+
         b = self.primary.buddy
         hearts = "❤️" * b.hearts + "♡" * (5 - b.hearts)
         text = (
+            f"Pokemon Buddy v{__version__}\n"
             f"{b.display_name}  Lv.{b.level}  {hearts}\n"
             f"EXP {b.exp}/{b.exp_to_next}  ·  친밀도 {b.friendship}/100"
         )
