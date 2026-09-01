@@ -9,7 +9,7 @@
 <br>
 
 ![Windows](https://img.shields.io/badge/Windows-10%2F11-2563eb?style=for-the-badge&logo=windows&logoColor=white)
-![Release](https://img.shields.io/badge/Release-v1.3.0-f97316?style=for-the-badge)
+![Release](https://img.shields.io/badge/Release-v1.4.0-f97316?style=for-the-badge)
 ![Fan%20Project](https://img.shields.io/badge/Made%20with-💛-22c55e?style=for-the-badge)
 
 <br>
@@ -76,7 +76,7 @@
 2. 모험자 이름을 정하고, 포켓볼 하나를 골라요
 3. 실루엣 속 첫 친구를 만나면 — 모험 시작! 🎉
 
-<sub>설치·업데이트·데이터 이전은 **[UPDATING.md](UPDATING.md)**, 버전별 변경 사항은 **[CHANGELOG.md](CHANGELOG.md)** 를 참고하세요.</sub>
+<sub>설치·업데이트·데이터 이전은 **[UPDATING.md](UPDATING.md)** 를 참고하세요.</sub>
 
 ---
 

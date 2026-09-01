@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from . import theme
 from .config import COUNT_CAP
 from .info_icon import InfoIcon
 from .items import ItemDef, ItemKind, items_of
@@ -36,7 +37,7 @@ KIND_LABELS = {
     ItemKind.TOY:      ("🎾 장난감",      "놀아주기에 사용"),
     ItemKind.POKEBALL: ("🔴 몬스터볼",    "야생 포켓몬 포획에 사용"),
     ItemKind.SPECIAL:  ("✨ 특수 아이템", "사용 버튼으로 활성화"),
-    ItemKind.SKILL:    ("📜 기술 교본",   "전수 버튼으로 기술 전수"),
+    ItemKind.SKILL:    ("📜 스킬",        "전수 버튼으로 스킬 전수"),
 }
 
 # Item kinds that get an action button on their tile (사용/전수).
@@ -104,8 +105,8 @@ class _ItemTile(QFrame):
         self.setFrameShape(QFrame.StyledPanel)
 
         if item.kind in _ACTION_KINDS and owned:
-            border = "#a380e8"
-            bg = "#f6f2ff"
+            border = theme.primary_light()
+            bg = theme.tint_soft()
         else:
             border = "#bbb" if owned else "#e0e0e0"
             bg = "#ffffff" if owned else "#fafafa"
@@ -147,7 +148,7 @@ class _ItemTile(QFrame):
         count_row = QLabel(f"×{min(count, COUNT_CAP)}" if owned else "—")
         count_row.setAlignment(Qt.AlignCenter)
         count_row.setStyleSheet(
-            f"font-size: 8pt; color: {'#4a7ddc' if owned else '#bbb'};"
+            f"font-size: 8pt; color: {theme.primary() if owned else '#bbb'};"
             "font-weight: bold;"
         )
         col.addWidget(count_row)
@@ -156,11 +157,12 @@ class _ItemTile(QFrame):
         if item.kind in _ACTION_KINDS:
             use_style = (
                 "QPushButton {"
-                "  background: #6f4cd6; color: white;"
+                f"  background: {theme.primary()};"
+                f"  color: {theme.on_primary()};"
                 "  border: none; border-radius: 4px;"
                 "  font-size: 7pt; padding: 0px;"
                 "}"
-                "QPushButton:hover { background: #5d3fc0; }"
+                f"QPushButton:hover {{ background: {theme.primary_dark()}; }}"
                 "QPushButton:disabled { background: #ccc; color: #888; }"
             )
             send_style = (
@@ -243,7 +245,7 @@ class InventoryPanel(QWidget):
             f"장난감 {totals[ItemKind.TOY]}  ·  "
             f"몬스터볼 {totals[ItemKind.POKEBALL]}  ·  "
             f"특수 {totals[ItemKind.SPECIAL]}  ·  "
-            f"교본 {totals[ItemKind.SKILL]}"
+            f"스킬 {totals[ItemKind.SKILL]}"
         )
 
         inner = QWidget()
@@ -308,7 +310,7 @@ class InventoryPanel(QWidget):
                                       totals[ItemKind.POKEBALL]), 0, 2, _AL)
         _add_centered(basic)
 
-        # ---- 특수 아이템 / 기술 교본 — own sections (multiple tiles) ----
+        # ---- 특수 아이템 / 스킬 — own sections (multiple tiles) ----
         for kind in [ItemKind.SPECIAL, ItemKind.SKILL]:
             title, hint = KIND_LABELS[kind]
             inner_layout.addWidget(_header(title, hint))

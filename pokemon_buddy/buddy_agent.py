@@ -24,9 +24,11 @@ from .config import (
     FRIENDSHIP_PET,
     FRIENDSHIP_PLAY,
     FRIENDSHIP_TRAIN,
+    PARTY_SLOT_STEP_PX,
     PASSIVE_EXP,
     PASSIVE_FRIENDSHIP_XP,
     PASSIVE_INTERVAL_S,
+    PET_SCREEN_MARGIN,
     PLAY_EXP,
     TRAIN_EXP,
 )
@@ -104,10 +106,32 @@ class BuddyAgent(QObject):
             if ix is not None and self._point_on_screen(ix, iy):
                 self.window.move(ix, iy)
                 return
-        # Default placement: bottom-right + slot offset to the left so
-        # slot 0 is rightmost, slot 1 sits 110px left of it, slot 2 220px.
-        offset = 24 + self.slot_index * 110
-        self.window.move_to_bottom_right(margin=offset)
+        self._place_default()
+
+    def _place_default(self) -> None:
+        """Rough fallback placement for a single buddy: a level row along
+        the bottom-right of the primary monitor, slot 0 LEFTMOST.
+
+        Approximate on purpose — an exact row has to know the widths of
+        every buddy to the right (a 3x-scaled member pushes its
+        neighbours), which only BuddyApp can see. It runs
+        `_layout_party_row()` right after startup to tidy this up."""
+        try:
+            party_size = max(1, len(self.store.load_active_party()))
+        except Exception:  # noqa: BLE001
+            party_size = self.slot_index + 1
+        slots_to_my_right = max(0, party_size - 1 - self.slot_index)
+        step = max(PARTY_SLOT_STEP_PX, self.window.width() + 10)
+        self.window.move_to_bottom_right(
+            margin=PET_SCREEN_MARGIN,
+            x_offset=slots_to_my_right * step,
+            primary_screen=True,
+        )
+
+    def reset_position(self) -> None:
+        """Forget the saved spot and snap back to the default row."""
+        self.store.clear_window_position(self.buddy.bag_id)
+        self._place_default()
 
     @staticmethod
     def _point_on_screen(x: int, y: int) -> bool:
@@ -257,8 +281,14 @@ class BuddyAgent(QObject):
 
     # ---- internal ----
     def _after_level_up(self) -> None:
-        """Speech + animation + emit so BuddyApp can offer evolution."""
-        self.window.say(f"레벨업! Lv.{self.buddy.level} 🎉", 2500)
+        """Speech + animation + emit so BuddyApp can offer evolution.
+
+        The EXP standing rides along in the bubble — a level-up used to be
+        the one moment that told you nothing about where EXP landed."""
+        b = self.buddy
+        self.window.say(
+            f"레벨업! Lv.{b.level} 🎉  (EXP {b.exp}/{b.exp_to_next})", 2500,
+        )
         self.anim.play("surprised")
         self.anim.play_halo()
         self.leveled_up.emit(self)
@@ -273,7 +303,7 @@ class BuddyAgent(QObject):
 
     def _update_status(self) -> None:
         b = self.buddy
-        hearts = "❤️" * b.hearts + "♡" * (5 - b.hearts)
+        hearts = b.hearts_bar
         text = (
             f"{b.display_name}  Lv.{b.level}  {hearts}\n"
             f"EXP {b.exp}/{b.exp_to_next}  ·  친밀도 {b.friendship}/100"

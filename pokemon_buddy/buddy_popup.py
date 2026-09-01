@@ -2,7 +2,8 @@
 
 Layout (top to bottom):
   - Header   : name + level pill
-  - Species  : species label (with 레어 prefix if applicable)
+  - Species  : species label (never decorated — 이로치 shows in the detail
+               dialog, not here)
   - Hearts   : 친밀도 hearts + numeric value
   - EXP gauge: single bar (hunger/happiness are gone in v2)
   - Actions  : feed / play / train / bag / dex / rename / close
@@ -31,6 +32,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from . import theme
 from .stat_gauge import StatGauge
 from .state import Buddy
 
@@ -131,7 +133,7 @@ class BuddyMenuPopup(QWidget):
         lvl_font.setPointSize(10)
         lvl_label.setFont(lvl_font)
         lvl_label.setStyleSheet(
-            "color: white; background: #4a7ddc;"
+            f"color: {theme.on_primary()}; background: {theme.primary()};"
             "border-radius: 8px; padding: 1px 8px;"
         )
         # Top-align so the pill stays put when the name wraps to two lines.
@@ -151,14 +153,14 @@ class BuddyMenuPopup(QWidget):
         # Friendship — hearts + value. The hidden XP accumulator and the
         # personality are NOT shown here — those live in the bag detail
         # dialog so the popup stays focused on quick actions.
-        hearts = "❤️" * buddy.hearts + "♡" * (5 - buddy.hearts)
+        hearts = buddy.hearts_bar
         hearts_label = QLabel(f"{hearts}  친밀도 {buddy.friendship}/100")
         hearts_label.setStyleSheet("color: #a04060; font-size: 9pt;")
         root.addWidget(hearts_label)
 
         # Single gauge — EXP only.
         root.addWidget(StatGauge("EXP", buddy.exp, buddy.exp_to_next,
-                                 QColor("#4a7ddc")))
+                                 QColor(theme.primary())))
 
         # Action buttons — two rows.
         for row_defs in (self.ACTION_ROW, self.NAV_ROW):

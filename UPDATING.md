@@ -1,6 +1,6 @@
 # 업데이트 / 설치 가이드
 
-Pokemon Buddy를 설치하고 업데이트하는 방법이야. 버전별 변경 내역은 [CHANGELOG.md](CHANGELOG.md)를 봐줘.
+Pokemon Buddy를 설치하고 업데이트하는 방법이야.
 
 배포 방식이 두 가지야:
 - **설치 파일** (`PokemonBuddy-Setup-X.Y.Z.exe`) — 권장. 프로그램 추가/제거에 등록되고 바로가기·자동 업데이트가 편해.

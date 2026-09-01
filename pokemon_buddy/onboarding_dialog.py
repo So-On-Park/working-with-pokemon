@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from . import theme
 from .config import DEFAULT_SPRITE_STYLE
 from .pokeball import make_pokeball_pixmap
 from .sprites import get_buddy_sprite_with_fallback
@@ -93,9 +94,10 @@ class _PokeballButton(QPushButton):
             "  border-radius: 50px;"
             "}"
             "QPushButton:hover {"
-            "  border-color: #4a7ddc; background: rgba(74,125,220,30);"
+            f"  border-color: {theme.primary()};"
+            f"  background: {theme.primary_rgba(30)};"
             "}"
-            "QPushButton:pressed { background: rgba(74,125,220,80); }"
+            f"QPushButton:pressed {{ background: {theme.primary_rgba(80)}; }}"
             "QPushButton:disabled { background: transparent; }"
         )
 
@@ -219,7 +221,7 @@ class OnboardingDialog(QDialog):
         self.reveal_label.setAlignment(Qt.AlignCenter)
         self.reveal_label.setWordWrap(True)
         self.reveal_label.setStyleSheet(
-            "color: #4a7ddc; font-size: 11pt; padding: 8px;"
+            f"color: {theme.primary()}; font-size: 11pt; padding: 8px;"
         )
         self.reveal_label.setMinimumHeight(64)
         layout.addWidget(self.reveal_label)

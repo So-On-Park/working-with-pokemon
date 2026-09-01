@@ -24,7 +24,7 @@
 ; want to move a save between machines, use the in-app 백업하기 / 백업 불러오기.
 
 #define MyAppName "Pokemon Buddy"
-#define MyAppVersion "1.3.1"
+#define MyAppVersion "1.4.0"
 #define MyAppPublisher "So-On-Park"
 #define MyAppExeName "PokemonBuddy.exe"
 
@@ -76,6 +76,12 @@ Source: "dist\PokemonBuddy.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; fallback; it never writes here. "skipifsourcedoesntexist" keeps the build
 ; working even if assets\ is trimmed before packaging.
 Source: "assets\*"; DestDir: "{app}\assets"; Flags: recursesubdirs ignoreversion skipifsourcedoesntexist
+; User-facing docs only. CHANGELOG.md is deliberately NOT shipped (and not
+; tracked in git) — it spells out balance numbers that stay private.
+; CREDITS.md ships: it carries the Pokémon asset attribution and the
+; non-commercial fan-project notice, which the README links to.
+Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "CREDITS.md"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 ; NOTE: the .pokeball / .scroll transfer libraries (pokeballs\, scrolls\) are
 ; intentionally NOT shipped — they're the distributor's personal collection.
 ; The file associations below still let any user import a .pokeball/.scroll
@@ -100,7 +106,7 @@ Root: HKCU; Subkey: "Software\Classes\PokemonBuddy.pokeball\shell\open\command";
 
 ; .scroll — a skill teaching-scroll. Parchment icon, double-click → import.
 Root: HKCU; Subkey: "Software\Classes\.scroll"; ValueType: string; ValueData: "PokemonBuddy.scroll"; Flags: uninsdeletevalue
-Root: HKCU; Subkey: "Software\Classes\PokemonBuddy.scroll"; ValueType: string; ValueData: "Pokemon Buddy 스킬 교본"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\PokemonBuddy.scroll"; ValueType: string; ValueData: "Pokemon Buddy 스킬"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\PokemonBuddy.scroll\DefaultIcon"; ValueType: string; ValueData: "{app}\assets\scroll.ico"
 Root: HKCU; Subkey: "Software\Classes\PokemonBuddy.scroll\shell\open\command"; ValueType: string; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
 

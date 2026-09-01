@@ -777,3 +777,26 @@ def pick_chatter(personality: Personality, friendship: int) -> str:
         # to a generic chatter line so the engine doesn't crash.
         return "..."
     return random.choice(bank[tier])
+
+
+# ---- 조사 (particle) helpers ----
+
+def ro_particle(word: str) -> str:
+    """로 / 으로 for `word`.
+
+    Korean picks 로 after a vowel or a ㄹ final, 으로 otherwise. The rest of
+    the app dodges this with "이(가)" style parentheses, but the evolution
+    line is the buddy's own excited shout — "거북왕(으)로 진화!" would read
+    like a form letter."""
+    if not word:
+        return "로"
+    last = word[-1]
+    if not ("가" <= last <= "힣"):
+        return "로"          # digits / latin / kana — 로 reads fine
+    jongseong = (ord(last) - 0xAC00) % 28
+    return "로" if jongseong in (0, 8) else "으로"   # 0 = none, 8 = ㄹ
+
+
+def evolution_line(new_species: str) -> str:
+    """What the buddy shouts the moment it finishes evolving."""
+    return f"{new_species}{ro_particle(new_species)} 진화! 잘 부탁해! ✨"

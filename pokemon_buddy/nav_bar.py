@@ -15,6 +15,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from . import theme
+
 
 # Tab identifier keys used as routing tags.
 NAV_POKEMON   = "pokemon"     # BagPanel ("내 포켓몬")
@@ -81,11 +83,13 @@ class NavBar(QFrame):
         if is_current:
             return (
                 "QPushButton {"
-                "  background: #4a7ddc; color: white;"
-                "  border: 1px solid #3a6ac0;"
+                f"  background: {theme.primary()};"
+                f"  color: {theme.on_primary()};"
+                f"  border: 1px solid {theme.primary_dark()};"
                 "  border-radius: 6px; padding: 2px 4px;"
                 "}"
-                "QPushButton:disabled { color: white; background: #4a7ddc; }"
+                f"QPushButton:disabled {{ color: {theme.on_primary()};"
+                f"  background: {theme.primary()}; }}"
             )
         return (
             "QPushButton {"

@@ -1,8 +1,8 @@
 """Detail view for a single bag entry — opened from the 내 포켓몬 tab.
 
 Modal dialog showing everything we know about this individual:
-  - Animated sprite + display name + level
-  - Species (with rare prefix), dex number, gender
+  - Animated sprite + 이로치 title (shinies only) + display name + level
+  - Species, dex number, gender
   - Personality
   - Catch metadata (date/time, days since, which ball)
   - Stats (level / EXP / friendship — full XP detail here)
@@ -32,8 +32,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from . import theme
 from .animated_sprite import AnimatedSprite
-from .config import FRIENDSHIP_XP_PER_POINT
+from .config import friendship_xp_for, SHINY_LABEL
 from . import display_scale as _display_scale
 from . import messages
 from .pokeball import make_pokeball_pixmap
@@ -121,8 +122,10 @@ class PokemonDetailDialog(QDialog):
         self.setWindowFlag(Qt.WindowStaysOnTopHint, True)
         self._dex_id = buddy.dex_id
         self.bag_id = buddy.bag_id
-        # Set True by the 보내기 button; BuddyApp acts on it after exec().
+        # Set True by the 보내기 / 진화시키기 buttons; BuddyApp acts on them
+        # after exec() so we don't stack dialogs on top of this modal.
         self.send_requested = False
+        self.evolve_requested = False
 
         self._sprites: List[AnimatedSprite] = []
 
@@ -146,6 +149,26 @@ class PokemonDetailDialog(QDialog):
 
         name_col = QVBoxLayout()
         name_col.setSpacing(2)
+
+        # 이로치 title — sits above the name like an honorific. Shinies keep
+        # their plain species name, so this badge is the only place the
+        # 이로치 state is spelled out in words.
+        if buddy.is_rare:
+            shiny_lbl = QLabel(f"✨ {SHINY_LABEL}")
+            sf = QFont(); sf.setBold(True); sf.setPointSize(8)
+            shiny_lbl.setFont(sf)
+            shiny_lbl.setStyleSheet(
+                "color: #8a5a12; background: #fdf1d6;"
+                "border: 1px solid #e8c877; border-radius: 7px;"
+                "padding: 1px 8px;"
+            )
+            shiny_lbl.setMaximumWidth(78)
+            shiny_lbl.setToolTip(
+                "이로치 — 아주 낮은 확률로만 만나는 색이 다른 개체야. "
+                "도감에도 일반 개체와 따로 기록돼."
+            )
+            name_col.addWidget(shiny_lbl)
+
         name_lbl = QLabel(buddy.display_name)
         nf = QFont(); nf.setBold(True); nf.setPointSize(12)
         name_lbl.setFont(nf)
@@ -160,7 +183,7 @@ class PokemonDetailDialog(QDialog):
 
         lvl_lbl = QLabel(f"Lv. {buddy.level}")
         lvl_lbl.setStyleSheet(
-            "color: white; background: #4a7ddc;"
+            f"color: {theme.on_primary()}; background: {theme.primary()};"
             "border-radius: 8px; padding: 1px 10px; font-size: 10pt;"
         )
         lvl_lbl.setMaximumWidth(70)
@@ -223,12 +246,13 @@ class PokemonDetailDialog(QDialog):
         inner_layout.addWidget(_row(
             "경험치", f"{buddy.exp} / {buddy.exp_to_next}",
         ))
-        hearts = "❤" * buddy.hearts + "♡" * (5 - buddy.hearts)
+        hearts = buddy.hearts_bar
         if buddy.friendship >= 100:
             fr_text = f"{hearts}  {buddy.friendship}/100 (만렙 ✨)"
         else:
             fr_text = (f"{hearts}  {buddy.friendship}/100  "
-                       f"(다음까지 {buddy.friendship_xp}/{FRIENDSHIP_XP_PER_POINT})")
+                       f"(다음까지 {buddy.friendship_xp}/"
+                       f"{friendship_xp_for(buddy.friendship)})")
         inner_layout.addWidget(_row("친밀도", fr_text, value_color="#a04060"))
 
         # Learned skills (기술) — compact value + ⓘ for the details, instead
@@ -257,7 +281,7 @@ class PokemonDetailDialog(QDialog):
             sk_val.setStyleSheet("color: #999; font-size: 9pt;")
             skill_h.addWidget(sk_val)
             skill_h.addWidget(InfoIcon(
-                "기술 교본(📜)을 전수하거나, 친밀도가 100인 친구가 "
+                "스킬(📜)을 전수하거나, 친밀도가 100인 친구가 "
                 "레벨업하면 기술을 배워."
             ))
         skill_h.addStretch(1)
@@ -343,12 +367,38 @@ class PokemonDetailDialog(QDialog):
         )
         send_btn.clicked.connect(self._on_send_clicked)
         btn_row.addWidget(send_btn)
+
+        # 진화시키기 — only offered when this buddy is actually eligible.
+        # The level-up prompt asks once and then stops nagging, so this is
+        # where a user who said "아직은 이대로" comes back to it.
+        from .evolution import can_evolve as _can_evolve
+        evo_target = _can_evolve(buddy.dex_id, buddy.level)
+        if evo_target is not None:
+            evo_btn = QPushButton("✨ 진화시키기")
+            evo_btn.setFixedHeight(26)
+            evo_btn.setToolTip(
+                f"지금 진화할 수 있어 (Lv.{buddy.level}). 눌러서 진화 연출을 "
+                "확인하고 결정해."
+            )
+            evo_btn.setStyleSheet(
+                f"QPushButton {{ background: {theme.primary()};"
+                f"  color: {theme.on_primary()}; border: none;"
+                "  border-radius: 5px; padding: 0 12px; font-size: 9pt; }"
+                f"QPushButton:hover {{ background: {theme.primary_dark()}; }}"
+            )
+            evo_btn.clicked.connect(self._on_evolve_clicked)
+            btn_row.addWidget(evo_btn)
+
         btn_row.addStretch(1)
         close_btn = QPushButton("닫기")
         close_btn.setFixedSize(60, 26)
         close_btn.clicked.connect(self.accept)
         btn_row.addWidget(close_btn)
         root.addLayout(btn_row)
+
+    def _on_evolve_clicked(self) -> None:
+        self.evolve_requested = True
+        self.accept()
 
     def _on_send_clicked(self) -> None:
         # Flag + close; BuddyApp handles the send after exec() returns so we

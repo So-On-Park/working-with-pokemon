@@ -44,7 +44,7 @@ class MainPanel(QDialog):
     bag_changed = Signal()                # rename / release in BagPanel
     reminders_saved = Signal()            # ReminderPanel Save clicked
     use_item_requested = Signal(str)     # SPECIAL item 사용 clicked
-    export_skill_requested = Signal(str)  # skill 교본 보내기 clicked
+    export_skill_requested = Signal(str)  # 스킬 보내기 clicked
     show_detail = Signal(int)            # bag_id — open PokemonDetailDialog
 
     def __init__(self, store: Store, sprite_style: str, active_bag_id: int,
@@ -106,6 +106,8 @@ class MainPanel(QDialog):
         panel = self._build_panel(key)
         self.stack.setCurrentWidget(panel)
         self.nav.set_current(key)
+        # Remembered so a theme swap can reopen on the same tab.
+        self.current_tab = key
 
     def _build_panel(self, key: str) -> QWidget:
         if key in self._panels:

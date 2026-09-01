@@ -100,3 +100,12 @@ PokemonBuddy-*-win64/
 # Local archive — backups, recordings, old releases moved out of the way.
 # Personal / large / regenerable; never tracked.
 _archive/
+
+# Changelog — kept locally, never published. It spells out balance numbers
+# (EXP curves, friendship costs, drop rates) that are deliberately not
+# public. The distributed installer ships the executable + README + CREDITS.
+CHANGELOG.md
+
+# Agent working notes — internal paths (brain / jipsa) and workflow rules.
+# Local tooling config, not part of the product.
+CLAUDE.md

@@ -75,7 +75,7 @@ def suggested_pokemon_filename(buddy: Buddy, adventurer_name: str) -> str:
 
 
 def suggested_skill_filename(skill_name: str) -> str:
-    return _sanitize_filename(f"{skill_name}_교본") + SKILL_EXT
+    return _sanitize_filename(f"{skill_name}_스킬") + SKILL_EXT
 
 
 # --------------------------------------------------------------- writing -----

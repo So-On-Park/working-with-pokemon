@@ -78,8 +78,28 @@ def test_version_is_single_source_of_truth():
 
     assert re.fullmatch(r"\d+\.\d+\.\d+", pokemon_buddy.__version__)
 
-    iss = Path(__file__).resolve().parents[1] / "installer.iss"
+    root = Path(__file__).resolve().parents[1]
+
+    iss = root / "installer.iss"
     m = re.search(r'#define MyAppVersion "([^"]+)"',
                   iss.read_text(encoding="utf-8"))
     assert m is not None, "MyAppVersion not found in installer.iss"
     assert m.group(1) == pokemon_buddy.__version__
+
+    # The README release badge is the third place the number lives — it
+    # silently drifted a whole release behind once, so pin it too.
+    readme = root / "README.md"
+    m = re.search(r"badge/Release-v([\d.]+)-",
+                  readme.read_text(encoding="utf-8"))
+    assert m is not None, "release badge not found in README.md"
+    assert m.group(1) == pokemon_buddy.__version__
+
+    # …and CHANGELOG must have a section for the version being shipped.
+    # It is deliberately untracked (balance numbers stay private), so a
+    # fresh clone simply won't have it — only check when it's present.
+    changelog_path = root / "CHANGELOG.md"
+    if changelog_path.exists():
+        changelog = changelog_path.read_text(encoding="utf-8")
+        assert f"\n## v{pokemon_buddy.__version__}\n" in changelog, (
+            f"CHANGELOG.md has no '## v{pokemon_buddy.__version__}' section"
+        )
