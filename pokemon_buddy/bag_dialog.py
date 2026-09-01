@@ -1,7 +1,7 @@
 """Bag panel — every Pokemon you currently own as a distinct individual.
 
 Compact horizontal cards: sprite | text | icon buttons. The buttons are
-icon-only (⭐ set-active, ✏️ rename, 🍃 release) to keep the panel narrow.
+icon-only (⭐ party, 📋 detail, ✏️ rename, 📮 박사에게 보내기).
 Hosted inside `MainPanel` as one of four tabs."""
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -23,18 +24,25 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from . import theme
 from .animated_sprite import AnimatedSprite
-from .config import DIALOG_W
 from .pokeball import make_pokeball_pixmap
 from .sprites import get_buddy_sprite_with_fallback, get_item_sprite
 from .state import Buddy, Store
 
 
 SPRITE_PX = 48
-# Card stretches to fill MainPanel content area (DIALOG_W - 32 = 368).
-CARD_W = DIALOG_W - 32
+# Cards stretch to fill the panel width — only the height is pinned. (A
+# CARD_W constant used to live here but nothing applied it, which made it
+# look like the width was fixed when it isn't.)
 CARD_H = 72
-ICON_BTN_SIDE = 22
+# Action buttons sit in a 2×2 grid on the right of each card. They used to
+# be a single column of four 18px-tall buttons: 4×18 + 3 gaps = 75px inside
+# a 72px card, so they overflowed and read as one cramped strip. Two rows
+# fit with room to spare AND leave each button big enough to hit.
+ICON_BTN_W = 30
+ICON_BTN_H = 27
+ICON_BTN_GAP = 4
 
 
 BALL_ICON_PX = 18
@@ -58,15 +66,19 @@ def _ball_icon_pixmap(ball_key: str) -> QPixmap:
 def _icon_button(emoji: str, tip: str) -> QPushButton:
     btn = QPushButton(emoji)
     btn.setToolTip(tip)
-    btn.setFixedSize(ICON_BTN_SIDE + 4, ICON_BTN_SIDE - 4)
+    btn.setFixedSize(ICON_BTN_W, ICON_BTN_H)
+    btn.setCursor(Qt.PointingHandCursor)
     btn.setStyleSheet(
         "QPushButton {"
-        "  font-size: 10pt;"
-        "  border: 1px solid #ccc; border-radius: 4px;"
-        "  background: #f7f7f7; padding: 0px;"
+        "  font-size: 11pt;"
+        "  border: 1px solid #d5d5d5; border-radius: 5px;"
+        "  background: #fbfbfb; padding: 0px;"
         "}"
-        "QPushButton:hover { background: #ececec; }"
-        "QPushButton:disabled { color: #ccc; background: #f0f0f0; }"
+        f"QPushButton:hover {{ background: {theme.tint_soft()};"
+        f"  border-color: {theme.primary_light()}; }}"
+        "QPushButton:pressed { background: #ececec; }"
+        "QPushButton:disabled { color: #ccc; background: #f2f2f2;"
+        "  border-color: #e6e6e6; }"
     )
     return btn
 
@@ -89,25 +101,24 @@ class _BagCard(QFrame):
         self.setFixedHeight(CARD_H)
         self.setFrameShape(QFrame.StyledPanel)
 
+        # Every card gets the same 1px frame — the party ones used to be
+        # 2px, which shifted their content by a pixel and made the list
+        # look ragged. Colour alone carries the distinction now.
         if is_primary:
-            border = "#4a7ddc"
-            bg = "#d9e6ff"
-            border_w = 2
+            border = theme.primary()
+            bg = theme.tint()
         elif in_party:
-            border = "#86b4f5"
-            bg = "#eaf2ff"
-            border_w = 2
+            border = theme.primary_light()
+            bg = theme.tint_soft()
         elif buddy.is_rare:
             border = "#e6b14a"
             bg = "#fff8e8"
-            border_w = 1
         else:
             border = "#bbb"
             bg = "#ffffff"
-            border_w = 1
         self.setStyleSheet(
             f"_BagCard {{ background: {bg};"
-            f"  border: {border_w}px solid {border};"
+            f"  border: 1px solid {border};"
             f"  border-radius: 6px; }}"
         )
 
@@ -144,9 +155,10 @@ class _BagCard(QFrame):
         if in_party:
             slot_text = "대표" if is_primary else "파티"
             slot_badge = QLabel(slot_text)
-            slot_color = "#4a7ddc" if is_primary else "#86b4f5"
+            slot_color = (theme.primary() if is_primary
+                          else theme.primary_light())
             slot_badge.setStyleSheet(
-                f"color: white; background: {slot_color};"
+                f"color: {theme.on_primary()}; background: {slot_color};"
                 "border-radius: 6px; padding: 0px 5px; font-size: 7pt;"
                 "font-weight: bold;"
             )
@@ -164,13 +176,13 @@ class _BagCard(QFrame):
         name_row.addWidget(ball_label)
         lvl = QLabel(f"Lv.{buddy.level}")
         lvl.setStyleSheet(
-            "color: white; background: #4a7ddc;"
+            f"color: {theme.on_primary()}; background: {theme.primary()};"
             "border-radius: 6px; padding: 0px 5px; font-size: 7pt;"
         )
         name_row.addWidget(lvl)
         middle.addLayout(name_row)
 
-        hearts = "❤" * buddy.hearts + "♡" * (5 - buddy.hearts)
+        hearts = buddy.hearts_bar
         # Card stays compact: hearts + EXP + friendship integer. The hidden
         # XP accumulator and the personality are reserved for the detail
         # dialog so the card list reads cleanly.
@@ -184,8 +196,9 @@ class _BagCard(QFrame):
 
         outer.addLayout(middle, stretch=1)
 
-        btn_col = QVBoxLayout()
-        btn_col.setSpacing(1)
+        # 2×2 grid — reading order is  ⭐ 📋 / ✏️ 👑.
+        btn_col = QGridLayout()
+        btn_col.setSpacing(ICON_BTN_GAP)
         btn_col.setContentsMargins(0, 0, 0, 0)
 
         # Party toggle: ⭐ adds to party, ✓ marks already-in-party (click
@@ -198,15 +211,15 @@ class _BagCard(QFrame):
         party_btn.clicked.connect(
             lambda: self.party_toggle.emit(self.bag_id)
         )
-        btn_col.addWidget(party_btn)
+        btn_col.addWidget(party_btn, 0, 0)
 
         detail_btn = _icon_button("📋", "상세보기")
         detail_btn.clicked.connect(lambda: self.show_detail.emit(self.bag_id))
-        btn_col.addWidget(detail_btn)
+        btn_col.addWidget(detail_btn, 0, 1)
 
         rename_btn = _icon_button("✏️", "이름 변경")
         rename_btn.clicked.connect(lambda: self.rename.emit(self.bag_id))
-        btn_col.addWidget(rename_btn)
+        btn_col.addWidget(rename_btn, 1, 0)
 
         # 4th slot is contextual: party members can be promoted to primary
         # (👑), non-party members can be released (🍃). Party members can't
@@ -217,13 +230,13 @@ class _BagCard(QFrame):
             promote_btn.clicked.connect(
                 lambda: self.set_active.emit(self.bag_id)
             )
-            btn_col.addWidget(promote_btn)
+            btn_col.addWidget(promote_btn, 1, 1)
         else:
-            release_btn = _icon_button("🍃", "방생")
+            release_btn = _icon_button("📮", "박사에게 보내기")
             release_btn.clicked.connect(
                 lambda: self.release.emit(self.bag_id)
             )
-            btn_col.addWidget(release_btn)
+            btn_col.addWidget(release_btn, 1, 1)
 
         outer.addLayout(btn_col)
 
@@ -335,7 +348,7 @@ class BagPanel(QWidget):
         # ---- party section ----
         party_header = QLabel(f"⭐ 파티  ({len(party_members)}/3)")
         party_header.setStyleSheet(
-            "color: white; background: #4a7ddc;"
+            f"color: {theme.on_primary()}; background: {theme.primary()};"
             "border-radius: 4px; padding: 3px 8px;"
             "font-weight: bold; font-size: 8pt;"
             "margin-top: 2px;"
@@ -372,11 +385,10 @@ class BagPanel(QWidget):
         if slot is None:
             ok = self.store.add_to_party(bag_id)
             if not ok:
-                QMessageBox.information(
-                    self, "파티 가득 참",
-                    "파티는 최대 3마리입니다. 다른 포켓몬을 먼저 제외해 주세요.",
-                )
-                return
+                # Party full — ask who steps out instead of sending the user
+                # away to un-star someone first.
+                if not self._swap_into_full_party(bag_id):
+                    return
         else:
             ok = self.store.remove_from_party(bag_id)
             if not ok:
@@ -387,6 +399,34 @@ class BagPanel(QWidget):
                 return
         self.bag_changed.emit()
         self._populate()
+
+    def _swap_into_full_party(self, incoming_bag_id: int) -> bool:
+        """Let the user pick which party member the newcomer replaces.
+        Returns True if a swap happened."""
+        from PySide6.QtWidgets import QDialog
+        from .buddy_picker import BuddyPickerDialog
+
+        incoming = self.store.get_bag_entry(incoming_bag_id)
+        if incoming is None:
+            return False
+        members = [b for b in (self.store.get_bag_entry(i)
+                               for i in self.store.load_active_party())
+                   if b is not None]
+        if not members:
+            return False
+
+        dlg = BuddyPickerDialog(
+            [(b, self.sprite_style) for b in members],
+            f"파티가 가득 찼어. {incoming.display_name}와(과) 누구를 교체할까?",
+            parent=self,
+            title="파티 교체",
+            action_label="교체",
+        )
+        if dlg.exec() != QDialog.Accepted or dlg.chosen_index is None:
+            return False
+        outgoing = members[dlg.chosen_index]
+        # Swap in place so the 대표 slot doesn't silently shuffle.
+        return self.store.swap_into_party(outgoing.bag_id, incoming_bag_id)
 
     def _on_rename(self, bag_id: int) -> None:
         entry = self.store.get_bag_entry(bag_id)
@@ -410,13 +450,17 @@ class BagPanel(QWidget):
         if entry is None:
             return
         if self.store.party_slot(bag_id) is not None:
-            # Belt-and-suspenders: the release button is disabled for party
+            # Belt-and-suspenders: the 박사에게 보내기 button is hidden for party
             # members but block here too in case of a stale UI race.
             return
         display = entry.display_name
+        # Wording is gentle ("박사에게 보내기") but the confirm has to stay
+        # blunt — this removes the buddy for good, and the phrasing could
+        # otherwise read as "parked somewhere I can fetch it back from".
         confirm = QMessageBox.question(
-            self, "방생",
-            f"{display}을(를) 정말 방생할까요? (가방에서 영구히 제거됩니다)",
+            self, "박사에게 보내기",
+            f"{display}을(를) 박사에게 보낼까요?\n"
+            f"내 가방에서 영구히 사라지고, 다시 데려올 수 없어요.",
         )
         if confirm != QMessageBox.Yes:
             return

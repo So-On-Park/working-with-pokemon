@@ -115,7 +115,7 @@ ITEMS: List[ItemDef] = [
     ItemDef("special.hyper-potion",  ItemKind.SPECIAL, "💊", "초고급상처약", slug="hyper-potion",
             description="사용하면 친밀도 +50."),
     ItemDef("special.rare-candy",    ItemKind.SPECIAL, "🍬", "이상한사탕",   slug="rare-candy",
-            description="사용 즉시 EXP +100."),
+            description="사용 즉시 레벨 +1. 만렙에겐 못 써."),
     ItemDef("special.master-ball",   ItemKind.SPECIAL, "💎", "마스터볼",     slug="master-ball",
             description="장착하면 다음 야생 포켓몬을 무조건 포획."),
     ItemDef("special.fire-stone",    ItemKind.SPECIAL, "🔥", "불꽃의돌",     slug="fire-stone",
@@ -130,10 +130,10 @@ ITEMS: List[ItemDef] = [
             description="니드리나·삐삐 등에게 쓰면 진화해."),
 
     # skill scrolls (두루마리) — teach a technique to a chosen party member.
-    ItemDef("skill.collector",       ItemKind.SKILL,   "📜", "수집광 교본",
-            description="파티원에게 전수하는 기술 교본. 배운 포켓몬은 화면에 "
+    ItemDef("skill.collector",       ItemKind.SKILL,   "📜", "수집광 스킬",
+            description="파티원에게 전수하는 스킬. 배운 포켓몬은 화면에 "
                         "떨어진 아이템을 끌어당겨 자동으로 주워와."),
-    ItemDef("skill.catcher",         ItemKind.SKILL,   "📜", "명포수 교본",
+    ItemDef("skill.catcher",         ItemKind.SKILL,   "📜", "명포수 스킬",
             description="배운 포켓몬은 야생 포켓몬이 나타나면 자동으로 "
                         "몬스터볼을 던져 잡아줘. (레벨 100이면 스스로 깨우침)"),
 ]

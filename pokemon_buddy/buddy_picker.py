@@ -30,10 +30,14 @@ class BuddyPickerDialog(QDialog):
     """Returns the chosen index via `chosen_index` after exec().
     None means the user cancelled."""
 
-    def __init__(self, agents, item_label: str,
-                 parent: QWidget | None = None) -> None:
+    def __init__(self, entries, prompt: str,
+                 parent: QWidget | None = None, *,
+                 title: str = "적용 대상",
+                 action_label: str = "선택") -> None:
+        """`entries` is a list of `(buddy, sprite_style)` pairs — plain data
+        so this works for on-screen agents and for bag rows alike."""
         super().__init__(parent)
-        self.setWindowTitle("적용 대상")
+        self.setWindowTitle(title)
         self.setMinimumWidth(320)
         self.setWindowFlag(Qt.WindowStaysOnTopHint, True)
         self.chosen_index: Optional[int] = None
@@ -44,13 +48,14 @@ class BuddyPickerDialog(QDialog):
         root = QVBoxLayout(self)
         root.setSpacing(8)
 
-        intro = QLabel(f"{item_label} — 어느 포켓몬에게 쓸까?")
+        intro = QLabel(prompt)
+        intro.setWordWrap(True)
         intro_font = QFont(); intro_font.setBold(True); intro_font.setPointSize(10)
         intro.setFont(intro_font)
         root.addWidget(intro)
 
-        # One row per party member: sprite preview + name + use button.
-        for idx, agent in enumerate(agents):
+        # One row per candidate: sprite preview + name + action button.
+        for idx, (buddy, sprite_style) in enumerate(entries):
             row = QHBoxLayout()
             row.setSpacing(8)
 
@@ -58,7 +63,7 @@ class BuddyPickerDialog(QDialog):
             preview.setFixedSize(PREVIEW_PX, PREVIEW_PX)
             preview.setAlignment(Qt.AlignCenter)
             sprite_path = get_buddy_sprite_with_fallback(
-                agent.sprite_style, agent.buddy.dex_id, agent.buddy.is_rare,
+                sprite_style, buddy.dex_id, buddy.is_rare,
             )
             if sprite_path is not None:
                 pm = QPixmap(str(Path(sprite_path)))
@@ -71,18 +76,16 @@ class BuddyPickerDialog(QDialog):
             row.addWidget(preview)
 
             name_col = QVBoxLayout()
-            name_lbl = QLabel(agent.buddy.display_name)
+            name_lbl = QLabel(buddy.display_name)
             nf = QFont(); nf.setBold(True); nf.setPointSize(10)
             name_lbl.setFont(nf)
             name_col.addWidget(name_lbl)
-            sub = QLabel(
-                f"Lv. {agent.buddy.level}  ·  친 {agent.buddy.friendship}/100"
-            )
+            sub = QLabel(f"Lv. {buddy.level}  ·  친 {buddy.friendship}/100")
             sub.setStyleSheet("color: #666; font-size: 8pt;")
             name_col.addWidget(sub)
             row.addLayout(name_col, stretch=1)
 
-            pick_btn = QPushButton("선택")
+            pick_btn = QPushButton(action_label)
             pick_btn.setFixedSize(60, 28)
             pick_btn.clicked.connect(lambda _checked=False, i=idx: self._pick(i))
             row.addWidget(pick_btn)
@@ -117,7 +120,11 @@ def pick_buddy(agents: List, item_label: str,
         return None
     if len(agents) == 1:
         return agents[0]
-    dlg = BuddyPickerDialog(agents, item_label, parent=parent)
+    dlg = BuddyPickerDialog(
+        [(a.buddy, a.sprite_style) for a in agents],
+        f"{item_label} — 어느 포켓몬에게 쓸까?",
+        parent=parent,
+    )
     log.debug("  dialog built, calling exec()")
     result = dlg.exec()
     log.debug("  exec() returned %r (Accepted=%r), chosen_index=%r",

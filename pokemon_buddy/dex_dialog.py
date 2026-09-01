@@ -19,18 +19,28 @@ from PySide6.QtWidgets import (
 )
 
 from .animated_sprite import AnimatedSprite
-from .config import BULK_DEX_RANGE, DIALOG_W
+from .config import BULK_DEX_RANGE, DIALOG_W, SHINY_LABEL
 from .pokemon_names import fallback_name, get_name_cached
 from .sprites import get_buddy_sprite_with_fallback
 from .state import Store
 
 
 COLS = 4
-# Card width derived from DIALOG_W so the grid exactly fills the panel.
-# Margins (8+8) + scroll/spacing slack (~16) + grid spacing (4 per gap).
 SPRITE_PX = 56
-_CONTENT_W = DIALOG_W - 32
-CARD_W = (_CONTENT_W - 4 * COLS) // COLS
+GRID_SPACING = 4
+
+# Card width is derived from DIALOG_W so the grid exactly fills the panel.
+# Everything that eats horizontal space has to be accounted for, or the
+# right-hand column gets clipped — which is what happened when the vertical
+# scrollbar (the dex always has one: 151+ entries) wasn't subtracted.
+_MAIN_PANEL_MARGINS = 8 + 8      # MainPanel root
+_DEX_PANEL_MARGINS = 4 + 4       # DexPanel root
+_GRID_MARGINS = 2 + 2            # QGridLayout inside the scroll area
+_SCROLLBAR_W = 18                # vertical scrollbar, always shown
+_CONTENT_W = DIALOG_W - (
+    _MAIN_PANEL_MARGINS + _DEX_PANEL_MARGINS + _GRID_MARGINS + _SCROLLBAR_W
+)
+CARD_W = (_CONTENT_W - (COLS - 1) * GRID_SPACING) // COLS
 CARD_H = 100
 
 
@@ -92,7 +102,9 @@ class _DexCard(QFrame):
         if is_caught:
             base = (caught.name if caught.name and not caught.name.startswith("#")
                     else (get_name_cached(dex_id) or fallback_name(dex_id)))
-            display = f"레어 {base}" if is_rare else base
+            # 이로치 keeps the plain species name — the ✨ on the dex number
+            # above is what tells the two entries apart.
+            display = base
             if caught_count > 1:
                 display = f"{display} ×{caught_count}"
             color = "#c47b1c" if is_rare else "#222"
@@ -101,6 +113,8 @@ class _DexCard(QFrame):
             name_label.setStyleSheet(
                 f"font-weight: bold; font-size: 8pt; color: {color};"
             )
+            if is_rare:
+                name_label.setToolTip(f"✨ {SHINY_LABEL} — 색이 다른 희귀 개체")
             layout.addWidget(name_label)
         else:
             unknown = QLabel("???")
@@ -157,7 +171,8 @@ class DexPanel(QWidget):
         scroll.setFrameShape(QFrame.NoFrame)
         inner = QWidget()
         grid = QGridLayout(inner)
-        grid.setSpacing(4)
+        # Must match the value CARD_W was derived from.
+        grid.setSpacing(GRID_SPACING)
         grid.setContentsMargins(2, 2, 2, 2)
 
         slot = 0

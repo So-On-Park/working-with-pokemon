@@ -143,7 +143,10 @@ APP_ID = "포켓버디"
 # Shared dialog width — one MainPanel window hosts all four tabs
 # (bag / inventory / dex / reminders) via a QStackedWidget. This is the
 # fixed size of that window.
-DIALOG_W = 400
+# Main window (내 포켓몬 / 내 가방 / 도감 / 리마인더 탭 host). Widened from
+# 400 so the 4-column 도감 grid has room for its scrollbar — the right-hand
+# column used to be clipped.
+DIALOG_W = 440
 DIALOG_H = 540
 
 # Action animations
@@ -171,14 +174,44 @@ BULK_DEX_RANGE = (1, 151)
 # Sole relationship stat (hunger / happiness are gone).
 #
 # Internally there's a hidden `friendship_xp` accumulator per buddy. Each
-# action grants XP; once `FRIENDSHIP_XP_PER_POINT` accumulates, the visible
-# friendship integer goes up by 1. Calibrated so that simply KEEPING the
-# buddy on screen caps friendship at 100 in ~2 weeks (≈100 hrs of screen
-# time — see the passive section below); active feed/play/train + the daily
-# greeting stack on top to get there faster. Friendship never decreases —
-# there is no decay (see Store.apply_friendship_decay, a no-op).
+# action grants XP; once it covers the current band's price (see
+# `friendship_xp_for` below), the visible friendship integer goes up by 1.
+# Calibrated so that simply KEEPING the buddy on screen caps friendship at
+# 100 in ≈96 hrs of screen time (see the passive section below); active
+# feed/play/train + the daily greeting stack on top to get there faster.
+# Friendship never decreases — there is no decay (see
+# Store.apply_friendship_decay, a no-op).
+# 친밀도 하트 — the 5-slot gauge shown in the popup / bag card / detail /
+# tray tooltip. Both are colour emoji so the filled and empty halves match
+# in weight and width; the old pairing of ❤️ (emoji) with ♡ (a thin outline
+# glyph from the text font) rendered as two different-looking symbols.
+# Swap these two strings to restyle every heart in the app at once.
+HEART_FULL = "❤️"
+HEART_EMPTY = "🤍"
+
 FRIENDSHIP_DEFAULT = 0
-FRIENDSHIP_XP_PER_POINT = 100
+# Friendship — rising cost in three bands, like the games (Gen 3+ shrinks
+# the gain as the value climbs). Cheap early so affection feels responsive,
+# expensive at the top so the last stretch means something.
+#   0–49   : 60 XP/point   (→ 50 in ~30h)
+#   50–79  : 100 XP/point  (→ 80 in ~60h — the 1.5x EXP bonus threshold)
+#   80–100 : 180 XP/point  (→ 100 in ~96h)
+FRIENDSHIP_XP_TIER_LOW_MAX = 50
+FRIENDSHIP_XP_TIER_MID_MAX = 80
+FRIENDSHIP_XP_LOW = 60
+FRIENDSHIP_XP_MID = 100
+FRIENDSHIP_XP_HIGH = 180
+
+
+def friendship_xp_for(points: int) -> int:
+    """XP needed to go from `points` to `points + 1` 친밀도."""
+    if points < FRIENDSHIP_XP_TIER_LOW_MAX:
+        return FRIENDSHIP_XP_LOW
+    if points < FRIENDSHIP_XP_TIER_MID_MAX:
+        return FRIENDSHIP_XP_MID
+    return FRIENDSHIP_XP_HIGH
+
+
 FRIENDSHIP_FEED = 8            # XP — was 1 friendship
 FRIENDSHIP_PLAY = 8
 FRIENDSHIP_TRAIN = 8
@@ -224,11 +257,22 @@ ABSENCE_LONG_HOURS = 168    # "한참 만이야!"
 # Tick — periodic refresh of the status / passive gains.
 TICK_MS = 30_000
 
-# Level — flat curve. Every level needs the same EXP (EXP_PER_LEVEL), so
-# progress is steady and predictable instead of the old level×100 ramp.
+# Level — rising curve: each level costs a bit more than the last, the way
+# the games do it. Lv.1→2 is 55 EXP, Lv.99→100 is 545, and the whole climb
+# is 29,700 EXP ≈ 148 hours of screen time (~3 weeks of workdays).
+# Early levels land fast so a new buddy feels responsive; the last stretch
+# is meant to be a commitment.
 # MAX_LEVEL is the cap (the 명포수 skill auto-learns here).
 MAX_LEVEL = 100
-EXP_PER_LEVEL = 200
+EXP_CURVE_BASE = 50
+EXP_CURVE_STEP = 5
+
+
+def exp_to_next_for(level: int) -> int:
+    """EXP needed to get from `level` to `level + 1`."""
+    return EXP_CURVE_BASE + EXP_CURVE_STEP * max(1, int(level))
+
+
 
 # Passive XP + friendship gains while the buddy is open on the user's screen.
 # This is the BACKBONE of progression: just keeping the buddy with you caps
@@ -245,6 +289,18 @@ PASSIVE_FRIENDSHIP_XP = 25
 FEED_EXP = 10                  # feeding now grants EXP too (+친밀도 below)
 PLAY_EXP = 15
 TRAIN_EXP = 35
+# 이상한사탕 grants no EXP at all — it raises the level by exactly 1, as in
+# the games (Store.level_up_once). No constant to tune here.
+
+# Default party placement — a level row along the bottom-right of the
+# PRIMARY monitor. Reading order matches the party order: slot 0 (대표) is
+# LEFTMOST, slot 2 hugs the right edge. Only used when a buddy has no
+# saved position; dragging one anywhere overrides this for good.
+PET_SCREEN_MARGIN = 24        # inset from the screen edges
+PARTY_SLOT_GAP_PX = 18        # clear space between neighbouring buddies
+# Fallback step for the rough per-agent placement (see BuddyApp's
+# _layout_party_row for the exact, width-aware version).
+PARTY_SLOT_STEP_PX = 110
 
 # Starter dex entry — picked at first run.
 STARTER_DEX_ID = 25
@@ -258,10 +314,14 @@ ENCOUNTER_DEX_RANGE = (1, 151)
 CATCH_RATE = 0.75
 CATCH_EXP_REWARD = 20
 # Rare Pokemon — once a wild encounter is rolling, this is the chance the
-# spawned Pokemon is the rare (shiny) variant. Display name gets the
-# "레어" prefix and the dex tracks it as a separate entry.
+# spawned Pokemon is the rare (shiny) variant. The dex tracks it as a
+# separate entry. The species name is NEVER decorated: a shiny 피카츄 is
+# still called 피카츄, exactly like in the games. It is marked visually
+# with ✨ in the lists, and titled 이로치 in the detail dialog.
 RARE_PROBABILITY = 0.01
-RARE_NAME_PREFIX = "레어"
+# 이로치 — the Korean fan term for a shiny. Used as a title/badge, not as
+# part of any name.
+SHINY_LABEL = "이로치"
 
 # Inventory — a single item key never stockpiles past this many. Enforced at
 # the storage layer (Store.add_item clamps) AND in the bag UI display.

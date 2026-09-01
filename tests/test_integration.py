@@ -75,13 +75,12 @@ def test_swap_buddy_promotes_to_primary(store, temp_assets, no_network):
 
 
 def test_passive_gain_accumulates_friendship(store, temp_assets, no_network):
-    """A single passive tick should credit PASSIVE_EXP toward exp, and
-    after FRIENDSHIP_XP_PER_POINT friendship-xp bumps the integer
-    friendship goes up by 1."""
+    """A single passive tick credits PASSIVE_EXP toward exp, and enough
+    friendship-xp ticks push the visible 친밀도 integer up by 1."""
     from pokemon_buddy.config import (
-        FRIENDSHIP_XP_PER_POINT,
         PASSIVE_FRIENDSHIP_XP,
         PASSIVE_EXP,
+        friendship_xp_for,
     )
     b = store.add_to_bag(1)
     store.gain_exp(b, PASSIVE_EXP)
@@ -90,7 +89,8 @@ def test_passive_gain_accumulates_friendship(store, temp_assets, no_network):
 
     # Friendship XP accumulator → 1 visible point. Refresh buddy each tick
     # because bump_friendship mutates the DB row directly.
-    for _ in range(FRIENDSHIP_XP_PER_POINT):
+    ticks = -(-friendship_xp_for(0) // PASSIVE_FRIENDSHIP_XP)   # ceil
+    for _ in range(ticks):
         fresh = store.get_bag_entry(b.bag_id)
         store.bump_friendship(fresh, PASSIVE_FRIENDSHIP_XP)
     refreshed = store.get_bag_entry(b.bag_id)

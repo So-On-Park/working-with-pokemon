@@ -23,7 +23,6 @@ from typing import List, Optional
 from .config import (
     DB_PATH,
     FRIENDSHIP_DEFAULT,
-    RARE_NAME_PREFIX,
     STARTER_DEX_ID,
 )
 
@@ -110,14 +109,15 @@ DEFAULT_REMINDERS = [
 class DexEntry:
     dex_id: int
     is_rare: bool
-    name: str                # base species name (no "레어" prefix)
+    name: str                # species name — never decorated
     first_caught_at: float
     last_caught_at: float
     count: int
 
     @property
     def display_name(self) -> str:
-        return f"{RARE_NAME_PREFIX} {self.name}" if self.is_rare else self.name
+        # Shinies (이로치) share the species name; the dex marks them with ✨.
+        return self.name
 
 
 @dataclass
@@ -177,7 +177,7 @@ class Buddy:
     level: int
     exp: int
     friendship: int              # 0..100 — the only relationship stat now
-    friendship_xp: int           # 0..FRIENDSHIP_XP_PER_POINT-1, hidden progress
+    friendship_xp: int           # hidden progress toward the next 친밀도 point
     caught_with: str             # item key of the ball used to catch it
     personality: str             # Personality enum value (e.g. 'playful')
     nickname_history: str        # JSON list of {nickname, set_at} entries
@@ -188,8 +188,8 @@ class Buddy:
 
     @property
     def exp_to_next(self) -> int:
-        from .config import EXP_PER_LEVEL
-        return EXP_PER_LEVEL
+        from .config import exp_to_next_for
+        return exp_to_next_for(self.level)
 
     @property
     def learned_skills(self) -> List[str]:
@@ -205,15 +205,16 @@ class Buddy:
 
     @property
     def species_label(self) -> str:
-        """Species name with the rare prefix when applicable. Used when we
-        need to refer to the kind of Pokemon, ignoring nicknames."""
-        return f"{RARE_NAME_PREFIX} {self.name}" if self.is_rare else self.name
+        """The kind of Pokemon, ignoring nicknames. Shinies (이로치) are NOT
+        renamed — a shiny 피카츄 is still 피카츄, as in the games. The shiny
+        state shows up as a ✨ marker in the lists and as the 이로치 title in
+        the detail dialog."""
+        return self.name
 
     @property
     def display_name(self) -> str:
         """What the user actually sees as this individual's name. A custom
-        nickname overrides everything; otherwise we use the species label
-        (which already accounts for rare)."""
+        nickname overrides everything; otherwise we use the species label."""
         if self.nickname:
             return self.nickname
         return self.species_label
@@ -229,6 +230,14 @@ class Buddy:
     @property
     def hearts(self) -> int:
         return max(0, min(5, self.friendship // 20))
+
+    @property
+    def hearts_bar(self) -> str:
+        """친밀도 as a five-slot emoji gauge. Single definition so the
+        popup, bag card, detail dialog and tray tooltip can't drift apart
+        (they used to disagree on which heart glyphs to use)."""
+        from .config import HEART_EMPTY, HEART_FULL
+        return HEART_FULL * self.hearts + HEART_EMPTY * (5 - self.hearts)
 
 
 def _clamp(v: int, lo: int = 0, hi: int = 100) -> int:
@@ -277,6 +286,88 @@ class Store:
             "INSERT INTO meta(key,value) VALUES(?,?) "
             "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
             (key, value),
+        )
+        self.conn.commit()
+
+    # ---------- window positions ----------
+    def clear_window_position(self, bag_id: int) -> None:
+        """Forget one buddy's saved spot so it falls back to the default
+        row placement on the next call to `_restore_position`."""
+        self.conn.execute(
+            "DELETE FROM meta WHERE key IN (?, ?)",
+            (f"win_x_{bag_id}", f"win_y_{bag_id}"),
+        )
+        self.conn.commit()
+
+    def clear_all_window_positions(self) -> int:
+        """Wipe every saved position. Returns how many rows went."""
+        cur = self.conn.execute(
+            r"DELETE FROM meta WHERE key LIKE 'win\_x\_%' ESCAPE '\' "
+            r"OR key LIKE 'win\_y\_%' ESCAPE '\'"
+        )
+        self.conn.commit()
+        return cur.rowcount
+
+    def prune_buddy_meta(self, party_ids: List[int]) -> int:
+        """Housekeeping for per-buddy meta rows, which nothing used to
+        clean up — released and transferred buddies left their keys behind
+        forever (10 of 17 saved positions once belonged to Pokemon that no
+        longer existed).
+
+        Two different lifetimes:
+          - `win_x_` / `win_y_`: only the CURRENT party needs a remembered
+            spot. A buddy sitting in the bag isn't on screen, so its old
+            coordinates are meaningless — and it gets a fresh row slot when
+            it rejoins.
+          - `evo_declined_`: tied to the bag entry, so it lives exactly as
+            long as the buddy does.
+
+        Returns the number of rows removed."""
+        party = {int(i) for i in party_ids}
+        alive = {r["id"] for r in self.conn.execute("SELECT id FROM bag")}
+        rules = (("win_x_", party), ("win_y_", party),
+                 ("evo_declined_", alive))
+        doomed = []
+        for row in self.conn.execute("SELECT key FROM meta"):
+            key = row["key"]
+            for prefix, keep in rules:
+                if not key.startswith(prefix):
+                    continue
+                try:
+                    bag_id = int(key[len(prefix):])
+                except ValueError:
+                    break            # not a per-buddy key after all
+                if bag_id not in keep:
+                    doomed.append(key)
+                break
+        for key in doomed:
+            self.conn.execute("DELETE FROM meta WHERE key=?", (key,))
+        if doomed:
+            self.conn.commit()
+        return len(doomed)
+
+    # ---------- evolution prompt memory ----------
+    @staticmethod
+    def _evo_declined_key(bag_id: int) -> str:
+        return f"evo_declined_{bag_id}"
+
+    def set_evolution_declined(self, bag_id: int, target_dex: int) -> None:
+        """Remember that the user answered "아직은 이대로" for this exact
+        evolution. Without it the prompt fires again on every single
+        level-up — which became a modal popup per 이상한사탕 once a buddy
+        was past its evolution level. Keyed by target so a *different*
+        evolution (a later stage) still gets to ask once."""
+        self.set_meta(self._evo_declined_key(bag_id), str(target_dex))
+
+    def is_evolution_declined(self, bag_id: int, target_dex: int) -> bool:
+        return self.get_meta(self._evo_declined_key(bag_id)) == str(target_dex)
+
+    def clear_evolution_declined(self, bag_id: int) -> None:
+        # Delete rather than blank the value — an empty row is still a row,
+        # and these accumulate one per buddy that ever evolved.
+        self.conn.execute(
+            "DELETE FROM meta WHERE key=?",
+            (self._evo_declined_key(bag_id),),
         )
         self.conn.commit()
 
@@ -840,6 +931,23 @@ class Store:
         self.save_active_party(party)
         return True
 
+    def swap_into_party(self, out_bag_id: int, in_bag_id: int) -> bool:
+        """Replace one party member with another, keeping the slot.
+
+        Position is meaningful — slot 0 is the 대표, and the item / magnet
+        engines walk the party in order — so a remove-then-append would
+        silently demote whoever you swapped out of slot 0. Returns False if
+        the swap doesn't make sense (target not in the party, incoming
+        already in it, or no such bag entry)."""
+        party = self.load_active_party()
+        if out_bag_id not in party or in_bag_id in party:
+            return False
+        if self.get_bag_entry(in_bag_id) is None:
+            return False
+        party[party.index(out_bag_id)] = in_bag_id
+        self.save_active_party(party)
+        return True
+
     def party_slot(self, bag_id: int) -> Optional[int]:
         """0-based slot if the buddy is in the party, else None."""
         party = self.load_active_party()
@@ -1007,8 +1115,25 @@ class Store:
         return b
 
     def gain_exp(self, b: Buddy, amount: int) -> bool:
+        """Back-compat wrapper — True when the buddy leveled up. Use
+        `gain_exp_detailed` when the UI has to announce the number."""
+        return self.gain_exp_detailed(b, amount)[1]
+
+    def gain_exp_detailed(self, b: Buddy, amount: int) -> tuple[int, bool]:
+        """Apply EXP and report `(actually_gained, leveled)`.
+
+        The friendship bonus means what lands is often bigger than what was
+        asked for (1.2x from 60, 1.5x from 80), and a maxed buddy banks
+        nothing at all. Any UI that says "+N" must use the returned number
+        rather than the requested `amount`, or it will lie to the user."""
         from .config import (FRIENDSHIP_BONUS_HIGH, FRIENDSHIP_BONUS_MID,
                              MAX_LEVEL)
+        if b.level >= MAX_LEVEL:
+            # Already capped — the bar stays full and nothing is banked.
+            b.level = MAX_LEVEL
+            b.exp = b.exp_to_next
+            self.save_active_buddy(b)
+            return 0, False
         multiplier = 1.0
         if b.friendship >= FRIENDSHIP_BONUS_HIGH:
             multiplier = 1.5
@@ -1026,18 +1151,46 @@ class Store:
             b.level = MAX_LEVEL
             b.exp = b.exp_to_next
         self.save_active_buddy(b)
-        return leveled
+        return gained, leveled
+
+    def level_up_once(self, b: Buddy) -> bool:
+        """이상한사탕 — raise the level by exactly 1, as in the games.
+
+        This is NOT an EXP grant: the friendship bonus does not apply (there
+        is no amount to multiply), and progress toward the next level resets
+        to zero instead of carrying over. Returns False when the buddy is
+        already at MAX_LEVEL and there is nothing to give."""
+        from .config import MAX_LEVEL
+        if b.level >= MAX_LEVEL:
+            b.level = MAX_LEVEL
+            b.exp = b.exp_to_next
+            self.save_active_buddy(b)
+            return False
+        b.level += 1
+        b.exp = 0
+        if b.level >= MAX_LEVEL:
+            # Landing on the cap pins the bar full, same as gain_exp.
+            b.level = MAX_LEVEL
+            b.exp = b.exp_to_next
+        self.save_active_buddy(b)
+        return True
 
     def bump_friendship(self, b: Buddy, xp_delta: int) -> None:
         """Add `xp_delta` toward the next friendship point. Once the buddy's
-        XP accumulator crosses FRIENDSHIP_XP_PER_POINT, the visible friendship
-        integer goes up by 1 and the accumulator resets. Negative deltas
-        drain the accumulator but never pull friendship itself down — that's
-        what `apply_friendship_decay` is for."""
-        from .config import FRIENDSHIP_XP_PER_POINT
+        XP accumulator covers the current band's price (`friendship_xp_for`),
+        the visible friendship integer goes up by 1 and the accumulator keeps
+        the remainder. Negative deltas drain the accumulator but never pull
+        friendship itself down — that's what `apply_friendship_decay` is
+        for."""
+        from .config import friendship_xp_for
         b.friendship_xp += int(xp_delta)
-        while b.friendship_xp >= FRIENDSHIP_XP_PER_POINT and b.friendship < 100:
-            b.friendship_xp -= FRIENDSHIP_XP_PER_POINT
+        # Each point costs whatever its own band charges, so the loop has to
+        # re-read the price after every point it buys.
+        while b.friendship < 100:
+            need = friendship_xp_for(b.friendship)
+            if b.friendship_xp < need:
+                break
+            b.friendship_xp -= need
             b.friendship += 1
         if b.friendship >= 100:
             # Cap reached — discard residual XP so the bar stays at full.
@@ -1050,9 +1203,26 @@ class Store:
 
     def bump_friendship_points(self, b: Buddy, points: int) -> None:
         """Add whole-point friendship instantly — used by potion items and
-        any other effect that should bypass the slow XP grind."""
-        from .config import FRIENDSHIP_XP_PER_POINT
-        self.bump_friendship(b, points * FRIENDSHIP_XP_PER_POINT)
+        any other effect that should bypass the slow XP grind.
+
+        Points cost different amounts of XP depending on the band, so a
+        flat `points × constant` would under- or over-deliver (a 상처약
+        promising +10 would land short once the buddy passed 친밀도 50).
+        Price each point at the rate that actually applies."""
+        from .config import friendship_xp_for
+        want = max(0, int(points))
+        if not want:
+            return
+        cost = 0
+        at = b.friendship
+        for _ in range(want):
+            if at >= 100:
+                break
+            cost += friendship_xp_for(at)
+            at += 1
+        # Top up the accumulator so the pending partial progress isn't
+        # what decides whether the promised points actually land.
+        self.bump_friendship(b, cost - b.friendship_xp)
 
     # ---------- reminders ----------
     def _ensure_default_reminders(self) -> None:

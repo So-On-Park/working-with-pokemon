@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from . import theme
 from .animated_sprite import AnimatedSprite
 from .pokeball import make_pokeball_pixmap
 from .star_burst import StarBurst
@@ -63,7 +64,7 @@ class _RevealBase(QDialog):
         self.headline.setFont(hf)
         self.headline.setAlignment(Qt.AlignCenter)
         self.headline.setWordWrap(True)
-        self.headline.setStyleSheet("color: #4a7ddc;")
+        self.headline.setStyleSheet(f"color: {theme.primary()};")
         root.addWidget(self.headline)
 
         # Stage: ball + sprite overlaid, centered.
@@ -184,7 +185,7 @@ class ReceiveRevealDialog(_RevealBase):
         sp.show()
         # 빵빠레 — fanfare burst as the buddy pops out.
         self._burst_at_ball()
-        rare = "✨ 레어 " if self._is_rare else ""
+        rare = "✨ " if self._is_rare else ""
         self.headline.setText(f"따단! {rare}{self._display_name}이(가)\n나의 동료가 되었어!")
         note = "📖 도감에 새로 추가됐어!" if self._is_new_dex else f"({self._species_name})"
         self.sub.setText(note)

@@ -80,35 +80,47 @@ def test_record_catch_creates_dex_entry(store):
 
 
 def test_gain_exp_levels_up(store):
-    from pokemon_buddy.config import EXP_PER_LEVEL
+    from pokemon_buddy.config import exp_to_next_for
     b = store.add_to_bag(1)
-    # Flat curve: every level needs EXP_PER_LEVEL.
-    leveled = store.gain_exp(b, EXP_PER_LEVEL)
+    leveled = store.gain_exp(b, exp_to_next_for(b.level))
     assert leveled is True
     refreshed = store.get_bag_entry(b.bag_id)
     assert refreshed.level == 2
 
 
-def test_exp_to_next_is_flat(store):
-    from pokemon_buddy.config import EXP_PER_LEVEL
+def test_exp_to_next_rises_with_level(store):
+    """Rising curve — later levels must cost strictly more than early ones."""
+    from pokemon_buddy.config import EXP_CURVE_STEP, exp_to_next_for
     b = store.add_to_bag(1)
-    assert b.exp_to_next == EXP_PER_LEVEL
-    store.gain_exp(b, EXP_PER_LEVEL * 5)   # jump several levels
+    assert b.exp_to_next == exp_to_next_for(1)
+    store.gain_exp(b, sum(exp_to_next_for(lv) for lv in range(1, 6)))
     b = store.get_bag_entry(b.bag_id)
     assert b.level == 6
-    assert b.exp_to_next == EXP_PER_LEVEL  # same at any level
+    assert b.exp_to_next == exp_to_next_for(6)
+    assert b.exp_to_next > exp_to_next_for(1)
+    assert exp_to_next_for(6) - exp_to_next_for(5) == EXP_CURVE_STEP
+
+
+def test_total_exp_to_max_matches_the_balance_target(store):
+    """The curve was chosen for its total: 29,700 EXP ≈ 148h of screen
+    time at PASSIVE_EXP. Guard the number so a tweak to base/step can't
+    silently move the whole game's pacing."""
+    from pokemon_buddy.config import MAX_LEVEL, exp_to_next_for
+    total = sum(exp_to_next_for(lv) for lv in range(1, MAX_LEVEL))
+    assert total == 29_700
 
 
 def test_gain_exp_caps_at_max_level(store):
-    from pokemon_buddy.config import EXP_PER_LEVEL, MAX_LEVEL
+    from pokemon_buddy.config import MAX_LEVEL, exp_to_next_for
     b = store.add_to_bag(1)
     # Dump way more than enough to overshoot the cap.
-    store.gain_exp(b, EXP_PER_LEVEL * (MAX_LEVEL + 50))
+    everything = sum(exp_to_next_for(lv) for lv in range(1, MAX_LEVEL))
+    store.gain_exp(b, everything * 2)
     b = store.get_bag_entry(b.bag_id)
     assert b.level == MAX_LEVEL
     assert b.exp == b.exp_to_next          # bar pinned full, no overflow
     # Further gains stay capped.
-    store.gain_exp(b, EXP_PER_LEVEL * 10)
+    store.gain_exp(b, everything)
     b = store.get_bag_entry(b.bag_id)
     assert b.level == MAX_LEVEL
 
@@ -134,8 +146,8 @@ def test_feed_grants_exp(store):
 
 def test_friendship_xp_accumulates_to_points(store):
     b = store.add_to_bag(1)
-    from pokemon_buddy.config import FRIENDSHIP_XP_PER_POINT
-    store.bump_friendship(b, FRIENDSHIP_XP_PER_POINT)
+    from pokemon_buddy.config import friendship_xp_for
+    store.bump_friendship(b, friendship_xp_for(b.friendship))
     refreshed = store.get_bag_entry(b.bag_id)
     assert refreshed.friendship == 1
 

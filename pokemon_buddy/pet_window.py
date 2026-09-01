@@ -13,7 +13,6 @@ from typing import Optional
 from PySide6.QtCore import QPoint, QRect, Qt, Signal
 from PySide6.QtGui import (
     QColor,
-    QCursor,
     QPainter,
     QPen,
     QPixmap,
@@ -94,6 +93,9 @@ class PetWindow(QWidget):
         # Tooltip text
         self._status_text = ""
 
+        # 조용히 시키기 — see set_muted().
+        self._muted = False
+
     # ---- sprite source ----
     def set_sprite_path(self, path: Optional[Path]) -> None:
         if path is None or not Path(path).exists():
@@ -131,7 +133,20 @@ class PetWindow(QWidget):
         self._bubble.update_anchor(self.frameGeometry())
 
     # ---- speech bubble ----
+    def set_muted(self, muted: bool) -> None:
+        """조용히 시키기 — suppress every bubble from this buddy.
+
+        Enforced here rather than at each call site because `say()` is the
+        single door every line goes through (chatter, level-up, items,
+        evolution, reminders). The status tooltip keeps updating, so the
+        buddy is quiet, not blind."""
+        self._muted = muted
+        if muted:
+            self._bubble.hide()
+
     def say(self, text: str, ms: int = 2500) -> None:
+        if self._muted:
+            return
         self._bubble.show_text(text, ms, self.frameGeometry())
 
     def set_status_text(self, text: str) -> None:
@@ -170,13 +185,22 @@ class PetWindow(QWidget):
         self._is_dragging = False
 
     # ---- placement ----
-    def move_to_bottom_right(self, margin: int = 24) -> None:
-        screen = self.screen() or QCursor.pos()
-        if hasattr(screen, "availableGeometry"):
-            geo = screen.availableGeometry()
-        else:
-            from PySide6.QtGui import QGuiApplication
-            geo = QGuiApplication.primaryScreen().availableGeometry()
-        x = geo.right() - self.width() - margin
+    def move_to_bottom_right(self, margin: int = 24, *, x_offset: int = 0,
+                             primary_screen: bool = False) -> None:
+        """Park the window at the bottom-right of a screen.
+
+        `margin` insets from both edges. `x_offset` shifts further LEFT
+        only — a party lined up via `margin` alone drifted diagonally
+        up-left, one step per slot, instead of standing in a row.
+
+        `primary_screen` pins the placement to the main monitor rather than
+        whichever screen Qt happens to associate with a not-yet-shown
+        window."""
+        from PySide6.QtGui import QGuiApplication
+        screen = None if primary_screen else self.screen()
+        if screen is None:
+            screen = QGuiApplication.primaryScreen()
+        geo = screen.availableGeometry()
+        x = geo.right() - self.width() - margin - x_offset
         y = geo.bottom() - self.height() - margin
         self.move(x, y)

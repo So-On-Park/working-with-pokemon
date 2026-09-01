@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QMessageBox,
     QSystemTrayIcon,
+    QWidget,
 )
 
 from .animations import AnimationEngine
@@ -32,10 +33,14 @@ from .config import (
     FRIENDSHIP_PET,
     FRIENDSHIP_PLAY,
     FRIENDSHIP_TRAIN,
+    MAX_LEVEL,
+    PARTY_SLOT_GAP_PX,
     PASSIVE_EXP,
     PASSIVE_FRIENDSHIP_XP,
     PASSIVE_INTERVAL_S,
+    PET_SCREEN_MARGIN,
     PLAY_EXP,
+    SHINY_LABEL,
     SPRITE_STYLES,
     TICK_MS,
     TRAIN_EXP,
@@ -67,6 +72,7 @@ from .nav_bar import NAV_DEX, NAV_INVENTORY, NAV_POKEMON, NAV_REMINDERS
 from .pet_window import PetWindow, _placeholder_pixmap
 from .pokemon_names import get_name
 from .star_burst import StarBurst
+from . import theme
 from .reminders import ReminderScheduler
 from .sprites import (
     get_buddy_sprite_with_fallback,
@@ -155,6 +161,10 @@ class BuddyApp:
         if stored_style != self.sprite_style:
             self.store.set_meta("sprite_style", self.sprite_style)
 
+        # 색상 테마 — must land BEFORE any dialog is built, since widgets
+        # bake the palette into their stylesheet at construction time.
+        theme.set_current(self.store.get_meta("color_theme"))
+
         # Party: up to 3 active buddies. Each gets its own BuddyAgent
         # (PetWindow + animations + chatter + per-buddy state). The
         # singular `active_bag_id` still tracks the primary (slot 0) for
@@ -232,6 +242,17 @@ class BuddyApp:
 
         # Wall-clock greetings (출근/점심/퇴근) removed — only user-set
         # reminders fire now. ReminderScheduler above is enough.
+
+        # Honour "포켓몬 화면에 표시" — a user who hid the buddies for a
+        # screenshot shouldn't find them back on screen after a restart.
+        self._apply_buddy_visibility()
+        self._apply_buddy_mute()
+        # Nobody has a remembered spot yet → give the party the exact row
+        # instead of each agent's rough solo guess.
+        if not self._party_has_saved_positions():
+            self._layout_party_row()
+        # Sweep meta rows orphaned by earlier releases / party changes.
+        self._prune_buddy_meta()
 
         primary.window.say("안녕! 같이 일하자 ✨", 3000)
         self._update_tray_status()
@@ -345,7 +366,25 @@ class BuddyApp:
             primary = self.primary
             self.encounters.buddy_widget = primary.window
             self.item_drops.buddy_widget = primary.window
+        # Newly-built agents show themselves in their constructor — re-apply
+        # the toggle so a party swap doesn't undo "숨기기".
+        self._apply_buddy_visibility()
+        self._apply_buddy_mute()
+        # A buddy that just left the party no longer needs its coordinates.
+        self._prune_buddy_meta()
         self._update_tray_status()
+
+    def _prune_buddy_meta(self) -> None:
+        """Drop per-buddy meta rows whose owner left the party (positions)
+        or the bag entirely (evolution-declined flags)."""
+        try:
+            removed = self.store.prune_buddy_meta(
+                [a.buddy.bag_id for a in self.agents]
+            )
+            if removed:
+                log.info("pruned %d stale per-buddy meta row(s)", removed)
+        except Exception:  # noqa: BLE001
+            log.exception("prune_buddy_meta failed")
 
     def _save_positions(self) -> None:
         for agent in self.agents:
@@ -353,6 +392,10 @@ class BuddyApp:
                 agent.save_position()
             except Exception:  # noqa: BLE001
                 pass
+        # Only the party keeps a remembered spot — drop everything else on
+        # the way out so the meta table doesn't grow a row per Pokemon the
+        # user has ever taken out.
+        self._prune_buddy_meta()
         # Close the SQLite handle so the next launch doesn't inherit a
         # lingering WAL / journal file from an unclean shutdown.
         try:
@@ -460,6 +503,19 @@ class BuddyApp:
             self._style_group.addAction(act)
             style_menu.addAction(act)
 
+        theme_menu = menu.addMenu("색상 테마")
+        self._theme_group = QActionGroup(theme_menu)
+        self._theme_group.setExclusive(True)
+        for key, label in theme.choices():
+            act = QAction(label, theme_menu)
+            act.setCheckable(True)
+            act.setChecked(key == theme.current().key)
+            act.triggered.connect(
+                lambda _checked=False, k=key: self.on_change_theme(k)
+            )
+            self._theme_group.addAction(act)
+            theme_menu.addAction(act)
+
         # Bulk download is a developer-mode-only convenience.
         if dev:
             bulk_act = QAction("에셋 일괄 다운로드 (Gen 1)", menu)
@@ -467,6 +523,25 @@ class BuddyApp:
             menu.addAction(bulk_act)
 
         menu.addSeparator()
+
+        mute_act = QAction("버디 조용히 시키기", menu)
+        mute_act.setCheckable(True)
+        mute_act.setChecked(self._buddies_muted())
+        mute_act.setToolTip("말풍선만 멈춰요. 성장은 그대로 이어집니다.")
+        mute_act.toggled.connect(self.on_toggle_buddies_muted)
+        menu.addAction(mute_act)
+
+        align_act = QAction("포켓몬 자리 정렬", menu)
+        align_act.setToolTip("주 모니터 오른쪽 아래에 나란히 다시 세워요.")
+        align_act.triggered.connect(self.on_align_buddies)
+        menu.addAction(align_act)
+
+        buddies_act = QAction("포켓몬 화면에 표시", menu)
+        buddies_act.setCheckable(True)
+        buddies_act.setChecked(self._buddies_visible())
+        buddies_act.setToolTip("화면 캡쳐할 때 잠깐 숨기기 좋아요.")
+        buddies_act.toggled.connect(self.on_toggle_buddies_visible)
+        menu.addAction(buddies_act)
 
         items_act = QAction("화면 아이템 표시", menu)
         items_act.setCheckable(True)
@@ -546,22 +621,26 @@ class BuddyApp:
     # (popup is per-buddy). The tray menu uses the primary by default.
     def on_feed(self, agent: Optional[BuddyAgent] = None) -> None:
         (agent or self.primary).on_feed()
-        # Feeding consumes a food item — refresh any open 내 가방 tab so the
-        # count drops immediately instead of staying stale until reopened.
+        # Feeding consumes a food item AND grants EXP/친밀도 — refresh both
+        # tabs so neither the count nor the card numbers stay stale.
         self._refresh_main_inventory()
+        self._refresh_after_buddy_change()
 
     def on_play(self, agent: Optional[BuddyAgent] = None) -> None:
         (agent or self.primary).on_play()
-        # Playing consumes a toy — keep the inventory tab in sync live.
         self._refresh_main_inventory()
+        self._refresh_after_buddy_change()
 
     def on_train(self, agent: Optional[BuddyAgent] = None) -> None:
         (agent or self.primary).on_train()
+        # Training costs no item but does move EXP + 친밀도.
+        self._refresh_after_buddy_change()
 
     def _on_agent_pet(self, agent: BuddyAgent) -> None:
         """Left-click on a buddy. Routed via agent's `pet_requested` so the
         right buddy gets the friendship bump."""
         agent.on_pet()
+        self._refresh_after_buddy_change()
 
     def on_quit(self) -> None:
         self._save_positions()
@@ -821,6 +900,103 @@ class BuddyApp:
         QTimer.singleShot(1600, self.encounters.request_auto_catch)
 
     # ---- item display toggle (항목8) ----
+    def on_align_buddies(self) -> None:
+        """트레이 → 포켓몬 자리 정렬. Drops the saved positions and re-lays
+        the party out along the bottom-right of the primary monitor. Also
+        the rescue hatch when a buddy ends up on a monitor you unplugged."""
+        self.store.clear_all_window_positions()
+        self._layout_party_row()
+        if self._buddies_visible():
+            self.primary.window.say("자리 정리 완료! ✨", 2000)
+
+    def _layout_party_row(self) -> None:
+        """Lay the party out as a level row on the primary monitor, slot 0
+        LEFTMOST so the on-screen order matches the party order.
+
+        Done here rather than per-agent because each buddy's x depends on
+        the widths of everyone to its right — a 3x-scaled member would sit
+        on top of its neighbour if each one only knew its own size."""
+        from PySide6.QtGui import QGuiApplication
+        screen = QGuiApplication.primaryScreen()
+        if screen is None or not self.agents:
+            return
+        geo = screen.availableGeometry()
+        right = geo.right() - PET_SCREEN_MARGIN
+        bottom = geo.bottom() - PET_SCREEN_MARGIN
+        # Walk right→left so the LAST slot hugs the edge and slot 0 lands
+        # furthest left.
+        for agent in reversed(self.agents):
+            try:
+                w, h = agent.window.width(), agent.window.height()
+                agent.window.move(right - w, bottom - h)
+                right -= w + PARTY_SLOT_GAP_PX
+            except RuntimeError:
+                pass
+
+    def _party_has_saved_positions(self) -> bool:
+        return any(
+            self.store.get_meta(f"win_x_{a.buddy.bag_id}") is not None
+            for a in self.agents
+        )
+
+    def _buddies_muted(self) -> bool:
+        return self.store.get_meta("buddies_muted", "0") == "1"
+
+    def _apply_buddy_mute(self) -> None:
+        muted = self._buddies_muted()
+        for agent in self.agents:
+            try:
+                agent.window.set_muted(muted)
+            except RuntimeError:
+                pass
+
+    def on_toggle_buddies_muted(self, muted: bool) -> None:
+        """트레이 → 버디 조용히 시키기. Progress keeps ticking; only the
+        speech bubbles stop. Hover a buddy for its status either way."""
+        self.store.set_meta("buddies_muted", "1" if muted else "0")
+        self._apply_buddy_mute()
+        if muted:
+            self.tray.showMessage(
+                APP_NAME,
+                "버디를 조용히 시켰어요. 말풍선만 멈추고 경험치·친밀도는 그대로 쌓여요.",
+                QSystemTrayIcon.Information, 3000,
+            )
+        else:
+            self.primary.window.say("다시 떠들어도 되지? 헤헤 ✨", 2200)
+
+    def _buddies_visible(self) -> bool:
+        return self.store.get_meta("buddies_visible", "1") != "0"
+
+    def _apply_buddy_visibility(self) -> None:
+        """Push the saved 화면 표시 setting onto every pet window. Called
+        after the party is (re)built so newly-spawned agents don't pop back
+        onto a screen the user deliberately cleared."""
+        visible = self._buddies_visible()
+        for agent in self.agents:
+            try:
+                if visible:
+                    agent.window.show()
+                    agent.window.raise_()
+                else:
+                    agent.window.hide()
+            except RuntimeError:
+                pass
+
+    def on_toggle_buddies_visible(self, visible: bool) -> None:
+        """트레이 토글 — hide the buddies for a clean screenshot without
+        quitting the app. Progress keeps ticking; only the windows go."""
+        self.store.set_meta("buddies_visible", "1" if visible else "0")
+        self._apply_buddy_visibility()
+        if visible:
+            self.primary.window.say("다시 나왔어! ✨", 2200)
+        else:
+            # The buddy can't speak from behind a hidden window.
+            self.tray.showMessage(
+                APP_NAME,
+                "포켓몬을 화면에서 숨겼어요. 트레이 메뉴에서 다시 켤 수 있어요.",
+                QSystemTrayIcon.Information, 3000,
+            )
+
     def _items_visible(self) -> bool:
         return self.store.get_meta("items_visible", "1") != "0"
 
@@ -843,6 +1019,20 @@ class BuddyApp:
         dlg.exec()
         if getattr(dlg, "send_requested", False):
             self.on_send_pokemon(bag_id)
+        elif getattr(dlg, "evolve_requested", False):
+            self.on_evolve_pokemon(bag_id)
+
+    def on_evolve_pokemon(self, bag_id: int) -> None:
+        """진화시키기 button — same reveal dialog as the level-up prompt,
+        available whenever the buddy is eligible."""
+        buddy = self.store.get_bag_entry(bag_id)
+        if buddy is None:
+            return
+        target = can_evolve(buddy.dex_id, buddy.level)
+        if target is None:
+            return
+        parent = getattr(self, "_main_panel", None) or self.primary.window
+        self._offer_evolution(bag_id, target, parent=parent)
 
     def _on_display_scale_changed(self, dex_id: int, scale: float) -> None:
         """Live-refresh every party member currently rendering `dex_id` so
@@ -946,7 +1136,7 @@ class BuddyApp:
         if result.get("kind") == "skill":
             self._refresh_panels()
             self.primary.window.say(
-                f"📜 {result['skill_name']} 교본을 받았어! 가방에서 전수할 수 있어 ✨",
+                f"📜 {result['skill_name']} 스킬을 받았어! 가방에서 전수할 수 있어 ✨",
                 3200)
             self.primary.anim.play("happy")
             return
@@ -996,7 +1186,7 @@ class BuddyApp:
         return None
 
     def on_export_skill(self, item_key: str) -> None:
-        """보내기 from a skill 교본 tile → save a .scroll file, consume one."""
+        """보내기 from a 스킬 tile → save a .scroll file, consume one."""
         from . import pokemon_transfer as xfer
         from . import skills as _sk
         item = find_item(item_key)
@@ -1139,6 +1329,8 @@ class BuddyApp:
                 3200,
             )
             target.anim.play("surprised")
+            # Only the scroll count changed — the bag card doesn't print
+            # 기술, so there is nothing stale over there to repaint.
             self._refresh_main_inventory()
             return
 
@@ -1150,6 +1342,18 @@ class BuddyApp:
             if fresh is not None and fresh.friendship >= 100:
                 target.window.say(
                     f"{target.buddy.display_name}의 친밀도는 이미 최고치(100)야! 💯",
+                    2600,
+                )
+                return
+
+        # Same deal for 이상한사탕 at the level cap: EXP stops banking, so
+        # eating one would burn the candy for nothing.
+        if item_key == "special.rare-candy":
+            fresh = self.store.get_bag_entry(target.buddy.bag_id)
+            if fresh is not None and fresh.level >= MAX_LEVEL:
+                target.window.say(
+                    f"{target.buddy.display_name}은(는) 이미 만렙"
+                    f"(Lv.{MAX_LEVEL})이야! 💯",
                     2600,
                 )
                 return
@@ -1176,25 +1380,49 @@ class BuddyApp:
             target.window.say("💊 친밀도 +50 ❤️❤️", 2400)
             target.anim.play("happy")
         elif item_key == "special.rare-candy":
-            leveled = self.store.gain_exp(target.buddy, 100)
+            # 원작과 같이 레벨을 정확히 1 올린다 — EXP 지급이 아니므로
+            # 친밀도 배율은 붙지 않는다.
+            leveled = self.store.level_up_once(target.buddy)
             target.reload_buddy()
             if leveled:
+                # _after_level_up spells out the new level + EXP standing.
                 target._after_level_up()
             else:
-                target.window.say("🍬 EXP +100!", 2400)
-                target.anim.play("surprised")
+                # Guarded above, so only reachable if the buddy hit the cap
+                # between the check and here.
+                target.window.say("🍬 어라, 아무 일도 없었어…", 2200)
         else:
             log.info("unhandled special item %s", item_key)
             self.store.add_item(item_key, 1)
             return
 
         self._refresh_main_inventory()
+        self._refresh_after_buddy_change()
         self._update_tray_status()
 
     def _refresh_main_inventory(self) -> None:
         mp = getattr(self, "_main_panel", None)
         if mp is not None:
             mp.refresh_inventory()
+
+    def _refresh_after_buddy_change(self, *, dex_changed: bool = False) -> None:
+        """Repopulate the 내 포켓몬 cards after anything mutated a bag row.
+
+        The cards print EXP / 레벨 / 친밀도 / 종족, so every action that
+        touches those (밥·놀이·훈련·쓰다듬기·사탕·진화·기술 전수) left the
+        tab showing pre-action numbers until it was rebuilt. Only called
+        from user-initiated actions — the passive tick deliberately does
+        NOT refresh, because repopulating resets the scroll position and
+        that would yank the list out from under someone browsing it.
+
+        `dex_changed` also rebuilds the 도감 tab (evolution registers a new
+        species entry)."""
+        mp = getattr(self, "_main_panel", None)
+        if mp is None:
+            return
+        mp.refresh_bag()
+        if dex_changed:
+            mp.refresh_dex()
 
     def on_swap_buddy(self, bag_id: int) -> None:
         """User clicked 'set as primary' on a bag card. Move the buddy into
@@ -1235,6 +1463,35 @@ class BuddyApp:
         self._update_tray_icon()
         label = next((lbl for k, lbl in SPRITE_STYLES if k == key), key)
         self.primary.window.say(f"스타일: {label}", 1800)
+
+    def on_change_theme(self, key: str) -> None:
+        """색상 테마 — swap the app's point colour.
+
+        Styles are baked into each widget when it's built, so an open
+        MainPanel has to be thrown away and rebuilt to pick up the new
+        palette. Dialogs opened later read the theme at construction."""
+        key = theme.normalize(key)
+        if key == theme.current().key:
+            return
+        theme.set_current(key)
+        self.store.set_meta("color_theme", key)
+        self._rebuild_main_panel_for_theme()
+        self.primary.window.say(f"테마: {theme.current().label}", 2000)
+
+    def _rebuild_main_panel_for_theme(self) -> None:
+        mp = getattr(self, "_main_panel", None)
+        if mp is None:
+            return
+        try:
+            was_visible = mp.isVisible()
+            tab = getattr(mp, "current_tab", NAV_POKEMON)
+            mp.close()
+        except RuntimeError:
+            self._main_panel = None
+            return
+        self._main_panel = None
+        if was_visible:
+            self.on_open_main(tab)
 
     def on_start_bulk(self) -> None:
         if self.bulk.is_running():
@@ -1492,7 +1749,8 @@ class BuddyApp:
                        ball_key: str = "pokeball.basic") -> None:
         log.info("caught wild: dex=%d name=%s rare=%s ball=%s",
                  dex_id, name, is_rare, ball_key)
-        display_species = f"레어 {name}" if is_rare else name
+        # Shinies keep the plain species name — only the ✨ marks them.
+        display_species = f"✨ {name}" if is_rare else name
         entry = self.store.record_catch(dex_id, name, is_rare=is_rare)
         self.store.add_to_bag(dex_id, is_rare=is_rare, caught_with=ball_key)
         mp = getattr(self, "_main_panel", None)
@@ -1509,10 +1767,10 @@ class BuddyApp:
         first_time = entry.count == 1
         if is_rare and first_time:
             primary.window.say(
-                f"✨ 레어한 새 포켓몬 {name}!!! 도감에 추가됐어!", 4000,
+                f"✨ {SHINY_LABEL} {name}!!! 도감에 추가됐어!", 4000,
             )
         elif is_rare:
-            primary.window.say(f"✨ 레어한 {name}을(를) 잡았다!!!", 3500)
+            primary.window.say(f"✨ {SHINY_LABEL} {name}을(를) 잡았다!!!", 3500)
         elif first_time:
             primary.window.say(
                 f"🎉 새로운 포켓몬 {name}! 도감에 추가됐어!", 3500,
@@ -1528,6 +1786,29 @@ class BuddyApp:
         if leveled:
             QTimer.singleShot(1200, primary._after_level_up)
         self._update_tray_status()
+
+    def _play_evolution_burst(self, agent: BuddyAgent) -> None:
+        """Sparkle burst centred ON the evolving buddy.
+
+        Deliberately different from `_play_party_fanfare`, which floats
+        above the head to celebrate. Evolution is a transformation, so the
+        sparkles come out of the sprite itself — and a second, wider ring
+        follows so it reads as a change rather than a pop."""
+        geo = agent.window.frameGeometry()
+        for delay, duration in ((0, 900), (260, 1100)):
+            QTimer.singleShot(
+                delay,
+                lambda d=duration: self._spawn_burst_at(geo.center(), d),
+            )
+
+    def _spawn_burst_at(self, center, duration_ms: int) -> None:
+        burst = StarBurst()
+        burst.play_at(
+            center,
+            on_done=lambda b=burst: self._cleanup_fanfare_burst(b),
+            duration_ms=duration_ms,
+        )
+        self._fanfare_bursts.append(burst)
 
     def _play_party_fanfare(self) -> None:
         """Star burst over every party member's head. Used to mark a rare
@@ -1566,32 +1847,88 @@ class BuddyApp:
         QTimer.singleShot(1500, lambda: self._maybe_offer_evolution(agent))
 
     def _maybe_offer_evolution(self, agent: BuddyAgent) -> None:
+        """Level-up hook — ask at most ONCE per evolution."""
         target = can_evolve(agent.buddy.dex_id, agent.buddy.level)
         if target is None:
             return
-        before_name = agent.buddy.display_name
+        if self.store.is_evolution_declined(agent.buddy.bag_id, target):
+            # Already said "not yet" — the 진화시키기 button in the detail
+            # dialog is how they change their mind, so stop interrupting.
+            return
+        self._offer_evolution(agent.buddy.bag_id, target, parent=agent.window)
+
+    def _offer_evolution(self, bag_id: int, target: int, *,
+                         parent: QWidget | None = None) -> bool:
+        """Show the before/after reveal and evolve on confirm. Returns True
+        if the buddy actually evolved. Shared by the level-up prompt and the
+        진화시키기 button."""
+        buddy = self.store.get_bag_entry(bag_id)
+        if buddy is None:
+            return False
         after_species = get_name(target)
         before_path = get_buddy_sprite_with_fallback(
-            self.sprite_style, agent.buddy.dex_id, agent.buddy.is_rare,
+            self.sprite_style, buddy.dex_id, buddy.is_rare,
         )
         after_path = get_buddy_sprite_with_fallback(
-            self.sprite_style, target, agent.buddy.is_rare,
+            self.sprite_style, target, buddy.is_rare,
         )
+        agent = next((a for a in self.agents if a.buddy.bag_id == bag_id), None)
+        # Never met this exact form? Show it as a black silhouette — the
+        # reveal is the evolution itself. Matched per variant because the
+        # dex counts 이로치 as its own entry: an 이로치 리자드 you've never
+        # seen is genuinely new even if you own the plain one.
+        after_known = self.store.get_dex_entry(
+            target, is_rare=buddy.is_rare,
+        ) is not None
         dlg = EvolutionDialog(
-            before_name, after_species, before_path, after_path,
-            parent=agent.window,
+            buddy.display_name, after_species, before_path, after_path,
+            parent=parent or (agent.window if agent else None),
+            after_known=after_known,
         )
-        if dlg.exec() == EvolutionDialog.Accepted:
+        if dlg.exec() != EvolutionDialog.Accepted:
+            self.store.set_evolution_declined(bag_id, target)
+            if agent is not None:
+                agent.window.say(
+                    "아직은 이대로 좋아! (마음이 바뀌면 상세 창에서 진화시켜줘)",
+                    3000,
+                )
+            return False
+        if agent is not None:
             self._do_evolve_agent(agent, target, after_species)
         else:
-            agent.window.say("아직은 이대로 좋아!", 2000)
+            self._do_evolve_bag_entry(bag_id, target, after_species)
+        return True
+
+    def _do_evolve_bag_entry(self, bag_id: int, new_dex_id: int,
+                             new_species_name: str) -> None:
+        """Evolve a buddy that isn't currently on screen — same bookkeeping
+        as `_do_evolve_agent` minus the sprite/speech, which need an agent."""
+        buddy = self.store.get_bag_entry(bag_id)
+        if buddy is None:
+            return
+        log.info("evolve (off-screen) bag_id=%d: %d -> %d (%s)",
+                 bag_id, buddy.dex_id, new_dex_id, new_species_name)
+        self.store.record_catch(new_dex_id, new_species_name,
+                                is_rare=buddy.is_rare)
+        self.store.evolve_bag_entry(bag_id, new_dex_id)
+        fresh = self.store.get_bag_entry(bag_id)
+        if fresh is not None and fresh.name.startswith("#"):
+            self.store.set_species_name(new_dex_id, new_species_name)
+        self.store.clear_evolution_declined(bag_id)
+        self._refresh_after_buddy_change(dex_changed=True)
+        # No pet window to speak from — say it through the tray instead so
+        # the evolution isn't completely silent.
+        self.tray.showMessage(
+            APP_NAME, messages.evolution_line(new_species_name),
+            QSystemTrayIcon.Information, 3500,
+        )
+        self._update_tray_status()
 
     def _do_evolve_agent(self, agent: BuddyAgent, new_dex_id: int,
                          new_species_name: str) -> None:
         log.info("evolve bag_id=%d: %d -> %d (%s)",
                  agent.buddy.bag_id, agent.buddy.dex_id,
                  new_dex_id, new_species_name)
-        old_display = agent.buddy.display_name
         self.store.record_catch(new_dex_id, new_species_name,
                                 is_rare=agent.buddy.is_rare)
         # Mutate this agent's bag row directly (not necessarily the active
@@ -1601,18 +1938,25 @@ class BuddyApp:
         if agent.buddy.name.startswith("#"):
             self.store.set_species_name(new_dex_id, new_species_name)
             agent.reload_buddy()
-        agent.window.say(
-            f"진화! {old_display} → {agent.buddy.display_name} ✨", 3500,
-        )
+        # The moment itself: burst + halo under the new form, then the
+        # buddy introduces itself.
+        self._play_evolution_burst(agent)
         agent.anim.play("surprised")
+        agent.anim.play_halo()
+        agent.window.say(messages.evolution_line(new_species_name), 3800)
+        self.store.clear_evolution_declined(agent.buddy.bag_id)
         if agent is self.primary:
             self._update_tray_icon()
+        # Evolution changes the species on the card AND registers a new dex
+        # entry — refresh here so every caller (돌 사용 / 레벨업 진화) is
+        # covered rather than each remembering on its own.
+        self._refresh_after_buddy_change(dex_changed=True)
         self._update_tray_status()
 
     def on_wild_fled(self, dex_id: int, name: str, is_rare: bool) -> None:
         if not name or not name.strip():
             name = f"#{dex_id:04d}"
-        display = f"레어 {name}" if is_rare else name
+        display = f"✨ {name}" if is_rare else name
         self.primary.window.say(f"{display}이(가) 도망갔네…", 2200)
 
     # ---- background tick ----
@@ -1629,12 +1973,23 @@ class BuddyApp:
     def _reassert_topmost(self) -> None:
         """Re-raise visible buddies so other windows can't push them under
         the taskbar. Best-effort — skipped while the screen is locked."""
-        if is_screen_locked():
+        if is_screen_locked() or not self._buddies_visible():
             return
         for agent in self.agents:
             try:
                 if agent.window.isVisible():
                     agent.window.raise_()
+            except RuntimeError:
+                pass
+        # …then put OUR OWN windows back above the buddies. Every app window
+        # is topmost, so this periodic raise was quietly burying whichever
+        # dialog the user was actually reading (내 포켓몬 / 상세 / 진화)
+        # behind the pets every 4 seconds. The app as a whole still floats
+        # above other programs — only the internal order changes.
+        for w in QApplication.topLevelWidgets():
+            try:
+                if w.isVisible() and not isinstance(w, PetWindow):
+                    w.raise_()
             except RuntimeError:
                 pass
 
@@ -1643,7 +1998,7 @@ class BuddyApp:
         from . import __version__
 
         b = self.primary.buddy
-        hearts = "❤️" * b.hearts + "♡" * (5 - b.hearts)
+        hearts = b.hearts_bar
         text = (
             f"Pokemon Buddy v{__version__}\n"
             f"{b.display_name}  Lv.{b.level}  {hearts}\n"
