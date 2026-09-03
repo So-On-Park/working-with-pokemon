@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
 from .animated_sprite import AnimatedSprite
 from .config import BULK_DEX_RANGE, DIALOG_W, SHINY_LABEL
 from .pokemon_names import fallback_name, get_name_cached
-from .sprites import get_buddy_sprite_with_fallback
+from .sprites import get_buddy_sprite_with_fallback, prefetch_sprites
 from .state import Store
 
 
@@ -76,8 +76,12 @@ class _DexCard(QFrame):
         layout.setContentsMargins(2, 2, 2, 2)
         layout.setSpacing(1)
 
+        # Cache-only: 151 cards × a synchronous download each would freeze
+        # the window for over a minute on a cold cache. Missing ones draw as
+        # the placeholder and get warmed by prefetch_sprites() below.
         sprite_path = get_buddy_sprite_with_fallback(sprite_style, dex_id,
-                                                    is_rare)
+                                                    is_rare,
+                                                    allow_download=False)
         self.sprite = AnimatedSprite(
             Path(sprite_path) if sprite_path else None,
             SPRITE_PX,
@@ -174,6 +178,14 @@ class DexPanel(QWidget):
         # Must match the value CARD_W was derived from.
         grid.setSpacing(GRID_SPACING)
         grid.setContentsMargins(2, 2, 2, 2)
+
+        # Warm anything the cards couldn't draw, off the UI thread. Normally
+        # a no-op — the installer ships every Gen 1 sprite.
+        prefetch_sprites(
+            sprite_style,
+            [(d, False) for d in range(lo, hi + 1)]
+            + [(d, True) for d in rare_ids],
+        )
 
         slot = 0
         for dex_id in range(lo, hi + 1):

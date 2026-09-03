@@ -117,16 +117,24 @@ def _url_for(style: str, dex_id: int) -> Optional[str]:
     return None
 
 
-def get_buddy_sprite(style: str, dex_id: int) -> Optional[Path]:
+def get_buddy_sprite(style: str, dex_id: int, *,
+                     allow_download: bool = True) -> Optional[Path]:
     """Return path to the requested style's GIF, fetching if needed.
     Returns None on offline + no cache. `style` here is an internal key
-    (one of bw / bw_shiny / showdown / showdown_shiny)."""
+    (one of bw / bw_shiny / showdown / showdown_shiny).
+
+    `allow_download=False` makes this a pure cache lookup. Callers that
+    render MANY sprites at once (the dex draws 151 cards) must use it —
+    a cold cache would otherwise fire 151 sequential HTTP requests on the
+    UI thread and freeze the window for over a minute."""
     cache = _cache_path(dex_id, style, "gif")
     if cache.exists():
         return cache
     bundled = _bundled(f"{dex_id:04d}_{style}.gif")
     if bundled is not None:
         return bundled
+    if not allow_download:
+        return None
     url = _url_for(style, dex_id)
     if url and _try_download(url, cache):
         return cache
@@ -134,7 +142,9 @@ def get_buddy_sprite(style: str, dex_id: int) -> Optional[Path]:
 
 
 def get_buddy_sprite_with_fallback(style: str, dex_id: int,
-                                   is_rare: bool = False) -> Optional[Path]:
+                                   is_rare: bool = False, *,
+                                   allow_download: bool = True
+                                   ) -> Optional[Path]:
     """Try the requested (style, is_rare) combination; fall back to BW if it
     fails (e.g. Showdown name unknown), and to a static PNG if BW is missing
     too. Used by the bag/dex/buddy renderers — the single source of truth for
@@ -157,26 +167,57 @@ def get_buddy_sprite_with_fallback(style: str, dex_id: int,
         return _bundled(f"{dex_id:04d}_bw.gif")
 
     resolved = _resolve_style_key(style, is_rare)
-    p = get_buddy_sprite(resolved, dex_id)
+    p = get_buddy_sprite(resolved, dex_id, allow_download=allow_download)
     if p is not None:
         return p
     # Drop the rare variant first — shiny URLs don't exist for every gen.
     if is_rare:
         base = _resolve_style_key(style, False)
-        p = get_buddy_sprite(base, dex_id)
+        p = get_buddy_sprite(base, dex_id, allow_download=allow_download)
         if p is not None:
             return p
     # Cross-style fallback: BW is the most comprehensive set.
     if resolved != "bw":
-        p = get_buddy_sprite("bw", dex_id)
+        p = get_buddy_sprite("bw", dex_id, allow_download=allow_download)
         if p is not None:
             return p
     png = _cache_path(dex_id, "pixel", "png")
     if png.exists():
         return png
+    if not allow_download:
+        return None
     if _try_download(PIXEL_PNG_URL.format(dex_id=dex_id), png):
         return png
     return None
+
+
+def prefetch_sprites(style: str, wanted: Iterable[tuple[int, bool]]) -> None:
+    """Warm the cache for `(dex_id, is_rare)` pairs on a daemon thread.
+
+    Fire-and-forget: nothing waits on it and no widget is touched, so it
+    can't block or crash the UI. The dex renders cache-only for instant
+    open; whatever this pulls down shows up the next time it's opened.
+    A no-op when every sprite is already present (the usual case — the
+    installer bundles all of Gen 1)."""
+    missing = [
+        (d, r) for d, r in wanted
+        if get_buddy_sprite_with_fallback(style, d, r,
+                                          allow_download=False) is None
+    ]
+    if not missing:
+        return
+
+    def _work() -> None:
+        log.info("prefetching %d missing sprite(s) for style=%s",
+                 len(missing), style)
+        for dex_id, is_rare in missing:
+            try:
+                get_buddy_sprite_with_fallback(style, dex_id, is_rare)
+            except Exception:  # noqa: BLE001 — a warmer must never take the app down
+                log.debug("prefetch failed for %d (rare=%s)", dex_id, is_rare)
+
+    threading.Thread(target=_work, name="sprite-prefetch",
+                     daemon=True).start()
 
 
 def get_model_sprite(dex_id: int) -> Optional[Path]:
