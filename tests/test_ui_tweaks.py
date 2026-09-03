@@ -316,3 +316,69 @@ def test_bag_card_buttons_fit_inside_the_card():
     )
     # And each button stays comfortably clickable.
     assert ICON_BTN_W >= 28 and ICON_BTN_H >= 24
+
+
+def test_dex_sprite_lookup_never_downloads(monkeypatch, temp_assets):
+    """도감은 캐시만 읽는다.
+
+    151 cards × a synchronous HTTP fetch each froze the window for over a
+    minute on a cold cache. `allow_download=False` is the guard; if a
+    refactor drops it, this test fires."""
+    from pokemon_buddy import sprites
+
+    calls = []
+    monkeypatch.setattr(sprites, "_try_download",
+                        lambda url, dest: calls.append(url) or False)
+
+    got = sprites.get_buddy_sprite_with_fallback(
+        "showdown", 25, False, allow_download=False)
+    assert got is None                 # nothing cached in the temp dir
+    assert calls == [], f"캐시 전용인데 다운로드를 시도함: {calls}"
+
+    # …and the default path still downloads, for single-sprite callers.
+    sprites.get_buddy_sprite_with_fallback("showdown", 25, False)
+    assert calls, "일반 호출은 여전히 받아와야 함"
+
+
+def test_prefetch_is_a_noop_when_everything_is_cached(monkeypatch,
+                                                      temp_assets):
+    """설치본은 스프라이트를 전부 번들하므로 스레드를 띄울 일이 없다."""
+    import threading
+    from pokemon_buddy import sprites
+
+    monkeypatch.setattr(sprites, "get_buddy_sprite_with_fallback",
+                        lambda *a, **kw: temp_assets / "cached.gif")
+    started = []
+    real = threading.Thread
+
+    class _Spy(real):
+        def start(self):
+            started.append(self.name)
+            # Don't actually run — this test only cares that it isn't spawned.
+
+    monkeypatch.setattr(sprites.threading, "Thread", _Spy)
+    sprites.prefetch_sprites("showdown", [(1, False), (2, False)])
+    assert started == [], "전부 캐시됐는데 스레드를 띄움"
+
+
+def test_prefetch_runs_in_the_background_when_something_is_missing(
+        monkeypatch, temp_assets):
+    import threading
+    from pokemon_buddy import sprites
+
+    monkeypatch.setattr(sprites, "get_buddy_sprite_with_fallback",
+                        lambda *a, **kw: None)
+    started = []
+    real = threading.Thread
+
+    class _Spy(real):
+        def start(self):
+            started.append((self.name, self.daemon))
+
+    monkeypatch.setattr(sprites.threading, "Thread", _Spy)
+    sprites.prefetch_sprites("showdown", [(1, False)])
+    assert len(started) == 1
+    name, is_daemon = started[0]
+    assert name == "sprite-prefetch"
+    # Daemon, or a pending download would keep the app alive after quit.
+    assert is_daemon is True
